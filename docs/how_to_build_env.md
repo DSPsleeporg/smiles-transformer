@@ -56,11 +56,14 @@ $ cd deepchem
 $ bash scripts/install_deepchem_conda.sh deepchem
 $ source activate deepchem
 $ python setup.py install
-$ nosetests -a '!slow' -v deepchem --nologcapture  
+$ nosetests -a '!slow' -v deepchem --nologcapture
+$ conda install jupyter
+$ source deactivate
 ```
 
 ### How to use DeepChem
 
 ```
 $ source activate deepchem
+$ jupyter notebook
 ```
