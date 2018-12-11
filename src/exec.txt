@@ -1,3 +1,7 @@
-python seq2seq.py src_train.txt tar_train.txt vocab_src.txt vocab_tar.txt --validation-source src_val.txt --validation-target tar_val.txt -e 2 -g 0 -u 256 --max-source-sentence 35 --max-target-sentence 35
+python seq2seq.py ../data/Enum2Enum/source/sentence_train_small.txt ../data/Enum2Enum/target/sentence_train_small.txt\
+ ../data/Enum2Enum/vocab.txt ../data/Enum2Enum/vocab.txt --validation-source ../data/Enum2Enum/source/sentence_test.txt\
+  --validation-target ../data/Enum2Enum/target/sentence_test.txt -e 100 -g 0
 
-python seq2seq.py data/sentence_train.txt data/sentence_train.txt data/vocab.txt data/vocab.txt --validation-source data/sentence_test.txt --validation-target data/sentence_test.txt -e 5 -g 0 -u 256 -l 1 --max-source-sentence 100 --max-target-sentence 100
+
+python seq2seq.py ../data/Enum2Enum/source/sentence_test.txt ../data/Enum2Enum/target/sentence_test.txt\
+ ../data/Enum2Enum/vocab.txt ../data/Enum2Enum/vocab.txt -e 100 -g 0

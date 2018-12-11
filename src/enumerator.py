@@ -168,6 +168,8 @@ class SmilesEnumerator(object):
         """Perform a randomization of a SMILES string
         must be RDKit sanitizable"""
         m = Chem.MolFromSmiles(smiles)
+        if m is None:
+            return None # Invalid SMILES
         ans = list(range(m.GetNumAtoms()))
         np.random.shuffle(ans)
         nm = Chem.RenumberAtoms(m,ans)

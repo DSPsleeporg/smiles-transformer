@@ -79,6 +79,10 @@ class Seq2seq(chainer.Chain):
             return h
 
     def translate(self, xs, max_length=100):
+        '''
+        TODO: Multinomial sampling
+        TODO: Accelerate with use_cudnn?
+        '''
         batch = len(xs)
         with chainer.no_backprop_mode(), chainer.using_config('train', False):
             xs = [x[::-1] for x in xs]
@@ -207,7 +211,7 @@ def main():
                         help='source sentence list for validation')
     parser.add_argument('--validation-target',
                         help='target sentence list for validation')
-    parser.add_argument('--batchsize', '-b', type=int, default=64,
+    parser.add_argument('--batchsize', '-b', type=int, default=256,
                         help='number of sentence pairs in each mini-batch')
     parser.add_argument('--epoch', '-e', type=int, default=20,
                         help='number of sweeps over the dataset to train')
@@ -215,24 +219,24 @@ def main():
                         help='GPU ID (negative value indicates CPU)')
     parser.add_argument('--resume', '-r', default='',
                         help='resume the training from snapshot')
-    parser.add_argument('--unit', '-u', type=int, default=1024,
+    parser.add_argument('--unit', '-u', type=int, default=256,
                         help='number of units')
-    parser.add_argument('--layer', '-l', type=int, default=3,
+    parser.add_argument('--layer', '-l', type=int, default=2,
                         help='number of layers')
     parser.add_argument('--min-source-sentence', type=int, default=1,
                         help='minimium length of source sentence')
-    parser.add_argument('--max-source-sentence', type=int, default=50,
+    parser.add_argument('--max-source-sentence', type=int, default=100,
                         help='maximum length of source sentence')
     parser.add_argument('--min-target-sentence', type=int, default=1,
                         help='minimium length of target sentence')
-    parser.add_argument('--max-target-sentence', type=int, default=50,
+    parser.add_argument('--max-target-sentence', type=int, default=100,
                         help='maximum length of target sentence')
-    parser.add_argument('--log-interval', type=int, default=200,
+    parser.add_argument('--log-interval', type=int, default=1000,
                         help='number of iteration to show log')
-    parser.add_argument('--validation-interval', type=int, default=4000,
-                        help='number of iteration to evlauate the model '
+    parser.add_argument('--validation-interval', type=int, default=1,
+                        help='number of epochs to evlauate the model '
                         'with validation dataset')
-    parser.add_argument('--snapshot_interval', type=int, default=4000,
+    parser.add_argument('--snapshot_interval', type=int, default=1,
                         help='Interval of snapshot')
     parser.add_argument('--out', '-o', default='result',
                         help='directory to output the result')
@@ -282,9 +286,9 @@ def main():
     updater = training.updaters.StandardUpdater(
         train_iter, optimizer, converter=convert, device=args.gpu)
     trainer = training.Trainer(updater, (args.epoch, 'epoch'), out=args.out)
-    snapshot_interval = (args.snapshot_interval, 'iteration')
+    snapshot_interval = (args.snapshot_interval, 'epoch')
     trainer.extend(extensions.snapshot_object(
-        model, 'model_iter_{.updater.iteration}.npz'), trigger=snapshot_interval)
+        model, 'model_epocch_{.updater.iteration}.npz'), trigger=snapshot_interval)
     trainer.extend(extensions.LogReport(
         trigger=(args.log_interval, 'iteration')))
     trainer.extend(extensions.PrintReport(
@@ -315,19 +319,19 @@ def main():
             source, target = test_data[numpy.random.choice(len(test_data))]
             result = model.translate([model.xp.array(source)])[0]
 
-            source_sentence = ' '.join([source_words[x] for x in source])
-            target_sentence = ' '.join([target_words[y] for y in target])
-            result_sentence = ' '.join([target_words[y] for y in result])
+            source_sentence = ''.join([source_words[x] for x in source])
+            target_sentence = ''.join([target_words[y] for y in target])
+            result_sentence = ''.join([target_words[y] for y in result])
             print('# source : ' + source_sentence)
             print('# result : ' + result_sentence)
             print('# expect : ' + target_sentence)
 
         trainer.extend(
-            translate, trigger=(args.validation_interval, 'iteration'))
+            translate, trigger=(args.validation_interval, 'epoch'))
         trainer.extend(
             CalculateBleu(
                 model, test_data, 'validation/main/bleu', device=args.gpu),
-            trigger=(args.validation_interval, 'iteration'))
+            trigger=(args.validation_interval, 'epoch'))
 
     print('start training')
     if args.resume:
