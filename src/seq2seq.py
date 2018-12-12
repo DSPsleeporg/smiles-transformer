@@ -288,7 +288,7 @@ def main():
     trainer = training.Trainer(updater, (args.epoch, 'epoch'), out=args.out)
     snapshot_interval = (args.snapshot_interval, 'epoch')
     trainer.extend(extensions.snapshot_object(
-        model, 'model_epocch_{.updater.iteration}.npz'), trigger=snapshot_interval)
+        model, 'model_epoch_{.updater.epoch}.npz'), trigger=snapshot_interval)
     trainer.extend(extensions.LogReport(
         trigger=(args.log_interval, 'iteration')))
     trainer.extend(extensions.PrintReport(
