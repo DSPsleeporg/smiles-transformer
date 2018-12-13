@@ -158,7 +158,7 @@ def main():
                         help='Vocabulary size of source language')
     parser.add_argument('--target-vocab', type=int, default=50,
                         help='Vocabulary size of target language')
-    parser.add_argument('--no-bleu', '-no-bleu', action='store_true',
+    parser.add_argument('--no-bleu', '-no-bleu', action='store_true', default=True,
                         help='Skip BLEU calculation')
     parser.add_argument('--use-label-smoothing', action='store_true',
                         help='Use label smoothing for cross entropy')
