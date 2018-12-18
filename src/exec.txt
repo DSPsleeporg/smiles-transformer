@@ -5,3 +5,6 @@ python seq2seq.py ../data/Enum2Enum/source/sentence_train_small.txt ../data/Enum
 
 python seq2seq.py ../data/Enum2Enum/source/sentence_test.txt ../data/Enum2Enum/target/sentence_test.txt\
  ../data/Enum2Enum/vocab.txt ../data/Enum2Enum/vocab.txt -e 100 -g 0
+
+Transformer
+python train.py -b 32 -g 0 -u 256 -l 2 -i ../../data/Enum2Enum/ -s sval.txt -t tval.txt -svalid sval.txt -tvalid tval.txt --source-vocab 50 --target-vocab 50

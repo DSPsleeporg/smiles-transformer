@@ -437,6 +437,20 @@ class Transformer(chainer.Chain):
         else:
             return self.output_and_loss(h_block, y_out_block)
 
+    def encode(self, x_block):
+        # Make Embedding
+        x_block = source_pad_concat_convert(x_block, device=None)
+        print(x_block)
+        ex_block = self.make_input_embedding(self.embed_x, x_block)
+
+        # Make Masks
+        xx_mask = self.make_attention_mask(x_block, x_block)
+        # Encode Sources
+        z_blocks = self.encoder(ex_block, xx_mask)
+        # [(batch, n_units, x_length), ...]
+        print(z_blocks.shape)
+        return z_blocks
+
     def translate(self, x_block, max_length=50, beam=5):
         if beam:
             return self.translate_beam(x_block, max_length, beam)

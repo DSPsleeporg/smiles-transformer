@@ -238,7 +238,7 @@ def main():
     trainer = training.Trainer(updater, (args.epoch, 'epoch'), out=args.out)
 
     # If you want to change a logging interval, change this number
-    log_trigger = (min(200, iter_per_epoch // 2), 'iteration')
+    log_trigger = (min(1000, iter_per_epoch // 10), 'iteration')
 
     def floor_step(trigger):
         floored = trigger[0] - trigger[0] % log_trigger[0]
@@ -247,9 +247,10 @@ def main():
         return (floored, trigger[1])
 
     # Validation every half epoch
-    eval_trigger = floor_step((iter_per_epoch // 2, 'iteration'))
-    record_trigger = training.triggers.MinValueTrigger(
-        'val/main/perp', eval_trigger)
+    # TAKES TOO MUCH TIME FOR VALIDATION
+    eval_trigger = floor_step((100, 'epoch'))
+    #record_trigger = training.triggers.MinValueTrigger(
+    #    'val/main/perp', eval_trigger)
 
     evaluator = extensions.Evaluator(
         test_iter, model,
@@ -285,8 +286,8 @@ def main():
     # Only if a model gets best validation score,
     # save (overwrite) the model
     trainer.extend(extensions.snapshot_object(
-        model, 'best_model.npz'),
-        trigger=record_trigger)
+        model, 'model_iter_{.updater.iteration}.npz'),
+        trigger=(1000, 'iteration'))
 
     def translate_one(source, target):
         words = preprocess.split_sentence(source)
@@ -298,7 +299,7 @@ def main():
         print('#  result : ' + ' '.join(words))
         print('#  expect : ' + target)
 
-    @chainer.training.make_extension(trigger=(200, 'iteration'))
+    @chainer.training.make_extension(trigger=(1000, 'iteration'))
     def translate(trainer):
         source, target = test_data[numpy.random.choice(len(test_data))]
         source = ' '.join([source_words[i] for i in source])
@@ -308,7 +309,7 @@ def main():
     # Gereneration Test
     trainer.extend(
         translate,
-        trigger=(min(200, iter_per_epoch), 'iteration'))
+        trigger=(min(1000, iter_per_epoch), 'iteration'))
 
     # Calculate BLEU every half epoch
     if not args.no_bleu:

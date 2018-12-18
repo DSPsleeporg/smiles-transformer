@@ -16,7 +16,7 @@ $ echo 'export PATH=/home/user/anaconda3/bin:$PATH' \
 
 ```
 $ pip install --upgrade pip
-$ pip install tqdm nltk progressbar selenium
+$ pip install tqdm nltk progressbar2 selenium
 ```
 
 TensorFlow hasn't yet supported Python 3.7...
