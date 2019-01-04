@@ -440,7 +440,6 @@ class Transformer(chainer.Chain):
     def encode(self, x_block):
         # Make Embedding
         x_block = source_pad_concat_convert(x_block, device=None)
-        print(x_block)
         ex_block = self.make_input_embedding(self.embed_x, x_block)
 
         # Make Masks
@@ -448,7 +447,6 @@ class Transformer(chainer.Chain):
         # Encode Sources
         z_blocks = self.encoder(ex_block, xx_mask)
         # [(batch, n_units, x_length), ...]
-        print(z_blocks.shape)
         return z_blocks
 
     def translate(self, x_block, max_length=50, beam=5):
