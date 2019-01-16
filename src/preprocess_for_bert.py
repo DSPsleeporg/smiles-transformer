@@ -26,7 +26,8 @@ def choose_pair(smiles, fps, n,m):
         lst = smiles[m*(N//n):]
     for i,sm in tqdm(enumerate(lst)):
         tanimotos = np.array(DataStructs.BulkTanimotoSimilarity(fps[i],fps)) # Tanimoto similarity
-        idx = tanimotos.argsort()[::-1][1]
+        idx = np.argpartition(tanimotos,-2)[-2] # Choose second largest (not the self)
+        #idx = tanimotos.argmax()
         with open('../data/chembl_24_bert.csv', 'a') as f:
             f.write('%s,%s,,,%f\n' %(sm,smiles[idx],tanimotos[idx]))
 
