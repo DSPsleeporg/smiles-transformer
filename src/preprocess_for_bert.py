@@ -9,7 +9,7 @@ from rdkit.Chem import AllChem
 
 def get_fps(candidates):
     smiles, fps = [], []
-    for sm in tqdm(candidates[:10000]):
+    for sm in tqdm(candidates):
         mol = Chem.MolFromSmiles(sm)
         if mol is None:
             continue
@@ -31,7 +31,7 @@ def choose_pair(smiles, fps, n,m):
             f.write('%s,%s,,,%f\n' %(sm,smiles[idx],tanimotos[idx]))
 
 def main():
-    num_process = 12
+    num_process = 16
     
     df = pd.read_csv('../data/chembl_24.csv')
     candidates = df['canonical_smiles'].values
