@@ -3,6 +3,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import multiprocessing
 import time
+import argparse
 from tqdm import tqdm
 from rdkit import Chem, DataStructs
 from rdkit.Chem import AllChem
@@ -20,23 +21,26 @@ def get_fps(candidates):
 
 def choose_pair(smiles, fps, n,m):
     N = len(smiles)
-    if m<n-1:
-        lst = smiles[m*(N//n):(m+1)*(N//n)]
-    else:
-        lst = smiles[m*(N//n):]
-    for i,sm in tqdm(enumerate(lst)):
+    for i in tqdm(range((m*N)//n, ((m+1)*N//n))):
         tanimotos = np.array(DataStructs.BulkTanimotoSimilarity(fps[i],fps)) # Tanimoto similarity
-        idx = np.argpartition(tanimotos,-2)[-2] # Choose second largest (not the self)
-        #idx = tanimotos.argmax()
+        tanimotos[i] = 0 # Choose second largest (not the self)
+        arg_i = np.argmax(tanimotos)
         with open('../data/chembl_24_bert.csv', 'a') as f:
-            f.write('%s,%s,,,%f\n' %(sm,smiles[idx],tanimotos[idx]))
+            f.write('%s,%s,,,%f\n' %(smiles[i],smiles[arg_i],tanimotos[arg_i]))
 
 def main():
-    num_process = 16
-    
-    df = pd.read_csv('../data/chembl_24.csv')
+    parser = argparse.ArgumentParser(description='Make pairs of similar molecules')
+    parser.add_argument('--n_process', '-p', type=int, default=1, help='number of processes paralelled')
+    parser.add_argument('--file_path', '-f', type=str, default='../data/chembl24_train.csv', help='specify which file to preprocess')
+    args = parser.parse_args()
+    print('%d processes paralelled.' % args.n_process)
+    print('File path: %s' % args.file_path )
+    print('Start preprocessing')
+
+    n_process = args.n_process   
+    df = pd.read_csv(args.file_path)
     candidates = df['canonical_smiles'].values
-    smiles, fps = get_fps(candidates)
+    smiles, fps = get_fps(candidates[:10000])
     N = len(smiles)
     print('N=%d'%N)
     
@@ -45,8 +49,8 @@ def main():
     # Execute multiprocessed choose_pair
     start = time.time()
     processes = []
-    for i in range(num_process):
-        process = multiprocessing.Process(target=choose_pair, args=([smiles, fps, num_process,i]))
+    for i in range(n_process):
+        process = multiprocessing.Process(target=choose_pair, args=([smiles, fps, n_process,i]))
         processes.append(process)
     for process in processes:
         process.start()
