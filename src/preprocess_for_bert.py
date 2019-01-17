@@ -40,7 +40,7 @@ def main():
     n_process = args.n_process   
     df = pd.read_csv(args.file_path)
     candidates = df['canonical_smiles'].values
-    smiles, fps = get_fps(candidates[:10000])
+    smiles, fps = get_fps(candidates)
     N = len(smiles)
     print('N=%d'%N)
     
