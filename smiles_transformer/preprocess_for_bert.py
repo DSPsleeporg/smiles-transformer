@@ -31,8 +31,8 @@ def choose_pair(smiles, fps, n, m, out_path):
 def main():
     parser = argparse.ArgumentParser(description='Make pairs of similar molecules')
     parser.add_argument('--n_process', '-p', type=int, default=1, help='number of processes paralelled')
-    parser.add_argument('--in_path', '-i', type=str, default='../data/chembl24_train.csv', help='input file')
-    parser.add_argument('--out_path', '-o', type=str, default='../data/chembl24_bert_train.csv', help='output file')
+    parser.add_argument('--in_path', '-i', type=str, default='data/chembl24_train.csv', help='input file')
+    parser.add_argument('--out_path', '-o', type=str, default='data/chembl24_bert_train.csv', help='output file')
     args = parser.parse_args()
     print('%d processes paralelled.' % args.n_process)
     print('Input file: %s' % args.in_path )

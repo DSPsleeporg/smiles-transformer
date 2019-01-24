@@ -4,7 +4,7 @@ from torch.utils.data import Dataset, DataLoader
 
 from .enumerator import SmilesEnumerator
 
-class Transform(object):
+class Randomizer(object):
 
     def __init__(self):
         self.sme = SmilesEnumerator()
@@ -23,20 +23,39 @@ class Transform(object):
 
     def split(self, sm):
         '''
-        function: Split SMILES into words. Care for Cl, Br, Si, Se, Na.
+        function: Split SMILES into words. Care for Cl, Br, Si, Se, Na etc.
         input: A SMILES
         output: A string with space between words
         '''
         arr = []
         i = 0
         while i < len(sm)-1:
-            if not sm[i] in ['C', 'B', 'S', 'N']:
+            if not sm[i] in ['%', 'C', 'B', 'S', 'N', 'R', 'X', 'L', 'A', 'M', \
+                            'T', 'Z', 's', 't', 'H', '+', '-', 'K', 'F']:
                 arr.append(sm[i])
                 i += 1
+            elif sm[i]=='%':
+                arr.append(sm[i:i+3])
+                i += 3
             elif sm[i]=='C' and sm[i+1]=='l':
                 arr.append(sm[i:i+2])
                 i += 2
+            elif sm[i]=='C' and sm[i+1]=='a':
+                arr.append(sm[i:i+2])
+                i += 2
+            elif sm[i]=='C' and sm[i+1]=='u':
+                arr.append(sm[i:i+2])
+                i += 2
             elif sm[i]=='B' and sm[i+1]=='r':
+                arr.append(sm[i:i+2])
+                i += 2
+            elif sm[i]=='B' and sm[i+1]=='e':
+                arr.append(sm[i:i+2])
+                i += 2
+            elif sm[i]=='B' and sm[i+1]=='a':
+                arr.append(sm[i:i+2])
+                i += 2
+            elif sm[i]=='B' and sm[i+1]=='i':
                 arr.append(sm[i:i+2])
                 i += 2
             elif sm[i]=='S' and sm[i+1]=='i':
@@ -45,7 +64,85 @@ class Transform(object):
             elif sm[i]=='S' and sm[i+1]=='e':
                 arr.append(sm[i:i+2])
                 i += 2
+            elif sm[i]=='S' and sm[i+1]=='r':
+                arr.append(sm[i:i+2])
+                i += 2
             elif sm[i]=='N' and sm[i+1]=='a':
+                arr.append(sm[i:i+2])
+                i += 2
+            elif sm[i]=='N' and sm[i+1]=='i':
+                arr.append(sm[i:i+2])
+                i += 2
+            elif sm[i]=='R' and sm[i+1]=='b':
+                arr.append(sm[i:i+2])
+                i += 2
+            elif sm[i]=='R' and sm[i+1]=='a':
+                arr.append(sm[i:i+2])
+                i += 2
+            elif sm[i]=='X' and sm[i+1]=='e':
+                arr.append(sm[i:i+2])
+                i += 2
+            elif sm[i]=='L' and sm[i+1]=='i':
+                arr.append(sm[i:i+2])
+                i += 2
+            elif sm[i]=='A' and sm[i+1]=='l':
+                arr.append(sm[i:i+2])
+                i += 2
+            elif sm[i]=='A' and sm[i+1]=='s':
+                arr.append(sm[i:i+2])
+                i += 2
+            elif sm[i]=='A' and sm[i+1]=='g':
+                arr.append(sm[i:i+2])
+                i += 2
+            elif sm[i]=='A' and sm[i+1]=='u':
+                arr.append(sm[i:i+2])
+                i += 2
+            elif sm[i]=='M' and sm[i+1]=='g':
+                arr.append(sm[i:i+2])
+                i += 2
+            elif sm[i]=='M' and sm[i+1]=='n':
+                arr.append(sm[i:i+2])
+                i += 2
+            elif sm[i]=='T' and sm[i+1]=='e':
+                arr.append(sm[i:i+2])
+                i += 2
+            elif sm[i]=='Z' and sm[i+1]=='n':
+                arr.append(sm[i:i+2])
+                i += 2
+            elif sm[i]=='s' and sm[i+1]=='i':
+                arr.append(sm[i:i+2])
+                i += 2
+            elif sm[i]=='s' and sm[i+1]=='e':
+                arr.append(sm[i:i+2])
+                i += 2
+            elif sm[i]=='t' and sm[i+1]=='e':
+                arr.append(sm[i:i+2])
+                i += 2
+            elif sm[i]=='H' and sm[i+1]=='e':
+                arr.append(sm[i:i+2])
+                i += 2
+            elif sm[i]=='+' and sm[i+1]=='2':
+                arr.append(sm[i:i+2])
+                i += 2
+            elif sm[i]=='+' and sm[i+1]=='3':
+                arr.append(sm[i:i+2])
+                i += 2
+            elif sm[i]=='+' and sm[i+1]=='4':
+                arr.append(sm[i:i+2])
+                i += 2
+            elif sm[i]=='-' and sm[i+1]=='2':
+                arr.append(sm[i:i+2])
+                i += 2
+            elif sm[i]=='-' and sm[i+1]=='3':
+                arr.append(sm[i:i+2])
+                i += 2
+            elif sm[i]=='-' and sm[i+1]=='4':
+                arr.append(sm[i:i+2])
+                i += 2
+            elif sm[i]=='K' and sm[i+1]=='r':
+                arr.append(sm[i:i+2])
+                i += 2
+            elif sm[i]=='F' and sm[i+1]=='e':
                 arr.append(sm[i:i+2])
                 i += 2
             else:
@@ -58,7 +155,7 @@ class Transform(object):
 
 class STDataset(Dataset):
 
-    def __init__(self, corpus_path, vocab, seq_len, transform, is_train=True):
+    def __init__(self, corpus_path, vocab, seq_len=203, transform=Randomizer(), is_train=True):
         self.vocab = vocab
         self.seq_len = seq_len
         self.is_train = is_train
@@ -96,7 +193,7 @@ class STDataset(Dataset):
                   "bert_label": bert_label,
                   "segment_embd": segment_embd,
                   "is_same": is_same_label}
-                  
+
         return {key: torch.tensor(value) for key, value in output.items()}
 
     def get_random_pair(self, index):
