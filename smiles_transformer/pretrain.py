@@ -1,4 +1,5 @@
 import argparse
+import os
 import torch
 import torch.nn as nn
 from torch.optim import Adam
@@ -154,7 +155,7 @@ def main():
     log_dir = os.path.join(args.out_dir, 'log')
     if not os.path.exists(log_dir):
         os.makedirs(log_dir)
-    with open(log_dir + '/' + args.name + '.csv') as f:
+    with open(log_dir + '/' + args.name + '.csv', 'a') as f:
         f.write('epoch,train_loss,train_acc,test_loss,test_acc\n')
 
     print("Training Start")

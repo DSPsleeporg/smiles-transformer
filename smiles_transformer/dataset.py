@@ -1,5 +1,6 @@
 import random
 import pandas as pd
+import torch
 from torch.utils.data import Dataset, DataLoader
 
 from enumerator import SmilesEnumerator
@@ -78,7 +79,7 @@ class STDataset(Dataset):
 
     def mask(self, sm):
         n_token = len(sm)
-        masked_ids, ans_ids = []*n_token, []*n_token
+        masked_ids, ans_ids = [None]*n_token, [None]*n_token
         for i, token in enumerate(sm):
             if self.is_train: # Mask probablistically when training
                 prob = random.random()
