@@ -1,4 +1,4 @@
 .ipynb_checkpoints/
 __pycache__/
-data/
+smiles_transformer/data/
 result/
