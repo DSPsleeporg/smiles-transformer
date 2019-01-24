@@ -1,7 +1,13 @@
+import os
 from smiles_transformer.build_vocab import WordVocab
 
 def test_vocab():
-    with open('data/corpus.txt', "r", encoding='utf-8') as f:
+    cwd = os.getcwd() 
+    if cwd[-5:]=='tests':
+        path = 'data/corpus.txt'
+    else:
+        path = 'tests/data/corpus.txt'
+    with open(path, "r", encoding='utf-8') as f:
         vocab = WordVocab(f, max_size=None, min_freq=1)
     assert len(vocab.stoi)==70
     assert len(vocab.itos)==70
