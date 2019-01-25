@@ -45,10 +45,12 @@ class STTrainer:
         
 
     def train(self, epoch):
-        self.iteration(epoch, self.train_data)
+        loss, acc = self.iteration(epoch, self.train_data)
+        return loss, acc
 
     def test(self, epoch):
-        self.iteration(epoch, self.test_data, train=False)
+        loss, acc = self.iteration(epoch, self.test_data, train=False)
+        return loss, acc
 
     def iteration(self, epoch, data_loader, train=True):
         """
@@ -90,8 +92,8 @@ class STTrainer:
             }
             if i % self.log_freq == 0:
                 data_iter.write(str(post_fix))
-                with open('../result/log/ST.csv', 'a') as f:
-                    f.write('%d,%f,%f\n' %(i, avg_loss/(i+1), total_correct/total_element*100))
+                # with open('../result/log/ST.csv', 'a') as f:
+                #     f.write('%d,%f,%f\n' %(i, avg_loss/(i+1), total_correct/total_element*100))
         return  avg_loss/len(data_iter), total_correct*100.0/total_element # Total loss and TSM accuracy
 
     def save(self, epoch, save_dir):
@@ -162,14 +164,14 @@ def main():
     for epoch in tqdm(range(args.n_epoch)):
         loss, acc = trainer.train(epoch)
         print("EP%d Train, loss=" % (epoch), loss, "accuracy=", acc)
-        with open(log_dir + '/' + args.name + '.csv') as f:
+        with open(log_dir + '/' + args.name + '.csv', 'a') as f:
             f.write('%d,%f,%f' %(epoch, loss, acc))
         
         trainer.save(epoch, save_dir) # Save model
         
         loss, acc = trainer.test(epoch)
         print("EP%d Test, loss=" % (epoch), loss, "accuracy=", acc)
-        with open(log_dir + '/' + args.name + '.csv') as f:
+        with open(log_dir + '/' + args.name + '.csv', 'a') as f:
             f.write('%f,%f\n' %(loss, acc))
 
 if __name__=='__main__':
