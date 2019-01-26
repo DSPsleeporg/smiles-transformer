@@ -14,7 +14,7 @@ class STTrainer:
     def __init__(self, bert: BERT, vocab_size: int,
                  train_dataloader: DataLoader, test_dataloader: DataLoader = None,
                  lr: float = 1e-4, betas=(0.9, 0.999), weight_decay: float = 0.01,
-                 with_cuda: bool = True, log_freq: int = 10):
+                 log_freq: int = 10, gpu_ids=[]):
         """
         :param bert: BERT model
         :param vocab_size: vocabに含まれるトータルの単語数
@@ -28,15 +28,12 @@ class STTrainer:
         """
 
         # GPU環境において、GPUを指定しているかのフラグ
-        cuda_condition = torch.cuda.is_available() and with_cuda
-        self.device = torch.device("cuda:0" if cuda_condition else "cpu")
-
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.bert = bert
         self.model = BERTLM(bert, vocab_size).to(self.device)
 
-        if torch.cuda.device_count() > 1:
-            print("Using %d GPUS for BERT" % torch.cuda.device_count())
-            self.model = nn.DataParallel(self.model)
+        if self.device == 'cuda':
+            self.model = nn.DataParallel(self.model, gpu_ids)
 
         self.train_data = train_dataloader
         self.test_data = test_dataloader
@@ -48,10 +45,12 @@ class STTrainer:
         
 
     def train(self, epoch):
-        self.iteration(epoch, self.train_data)
+        loss, acc = self.iteration(epoch, self.train_data)
+        return loss, acc
 
     def test(self, epoch):
-        self.iteration(epoch, self.test_data, train=False)
+        loss, acc = self.iteration(epoch, self.test_data, train=False)
+        return loss, acc
 
     def iteration(self, epoch, data_loader, train=True):
         """
@@ -93,6 +92,8 @@ class STTrainer:
             }
             if i % self.log_freq == 0:
                 data_iter.write(str(post_fix))
+                # with open('../result/log/ST.csv', 'a') as f:
+                #     f.write('%d,%f,%f\n' %(i, avg_loss/(i+1), total_correct/total_element*100))
         return  avg_loss/len(data_iter), total_correct*100.0/total_element # Total loss and TSM accuracy
 
     def save(self, epoch, save_dir):
@@ -117,8 +118,8 @@ def main():
     parser.add_argument('--out-dir', '-o', type=str, default='../result', help='output directory')
     parser.add_argument('--name', '-n', type=str, default='ST', help='model name')
     parser.add_argument('--seq_len', type=int, default=203, help='maximum length of the paired seqence')
-    parser.add_argument('--batch_size', '-b', type=int, default=1024, help='batch size')
-    parser.add_argument('--n_worker', '-w', type=int, default=8, help='number of workers')
+    parser.add_argument('--batch_size', '-b', type=int, default=256, help='batch size')
+    parser.add_argument('--n_worker', '-w', type=int, default=16, help='number of workers')
     parser.add_argument('--hidden', type=int, default=256, help='length of hidden vector')
     parser.add_argument('--n_layer', '-l', type=int, default=4, help='number of layers')
     parser.add_argument('--n_head', type=int, default=4, help='number of attention heads')
@@ -127,8 +128,8 @@ def main():
     parser.add_argument('--beta1', type=float, default=0.9, help='Adam beta1')
     parser.add_argument('--beta2', type=float, default=0.999, help='Adam beta2')
     parser.add_argument('--weight-decay', type=float, default=0.01, help='dropout rate')
-    parser.add_argument('--with-cuda', action='store_true', help='use CUDA')
     parser.add_argument('--log-freq', type=int, default=100, help='log frequency')
+    parser.add_argument('--gpu', metavar='N', type=int, nargs='+', help='list of GPU IDs to use')
     args = parser.parse_args()
 
     print("Loading Vocab", args.vocab)
@@ -142,10 +143,11 @@ def main():
     test_data_loader = DataLoader(test_dataset, batch_size=args.batch_size, num_workers=args.n_worker) 
     print("Building BERT model")
     bert = BERT(len(vocab), hidden=args.hidden, n_layers=args.n_layer, attn_heads=args.n_head, dropout=args.dropout)
+    bert.cuda()
     print("Creating BERT Trainer")
     trainer = STTrainer(bert, len(vocab), train_dataloader=train_data_loader, test_dataloader=test_data_loader,
                         lr=args.lr, betas=(args.beta1, args.beta2), weight_decay=args.weight_decay,
-                        with_cuda=args.with_cuda, log_freq=args.log_freq)
+                        log_freq=args.log_freq, gpu_ids=args.gpu)
 
     if not os.path.exists(args.out_dir):
         os.makedirs(args.out_dir)
@@ -162,14 +164,14 @@ def main():
     for epoch in tqdm(range(args.n_epoch)):
         loss, acc = trainer.train(epoch)
         print("EP%d Train, loss=" % (epoch), loss, "accuracy=", acc)
-        with open(log_dir + '/' + args.name + '.csv') as f:
-            f.write('%d,%f,%f' %(epoch, loss, acc))
+        with open(log_dir + '/' + args.name + '.csv', 'a') as f:
+            f.write('%d,%f,%f,' %(epoch, loss, acc))
         
         trainer.save(epoch, save_dir) # Save model
         
         loss, acc = trainer.test(epoch)
         print("EP%d Test, loss=" % (epoch), loss, "accuracy=", acc)
-        with open(log_dir + '/' + args.name + '.csv') as f:
+        with open(log_dir + '/' + args.name + '.csv', 'a') as f:
             f.write('%f,%f\n' %(loss, acc))
 
 if __name__=='__main__':

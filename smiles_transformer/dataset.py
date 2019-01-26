@@ -86,11 +86,11 @@ class STDataset(Dataset):
             else:  # Do not mask when predicting
                 prob = 1.0
 
-            if prob > 0.15:
+            if prob > 0.05:
                 masked_ids[i] = self.vocab.stoi.get(token, self.vocab.unk_index)
                 ans_ids[i] = 0
             else: # Mask
-                prob /= 0.15
+                prob /= 0.05
                 # 80% randomly change token to mask token
                 if prob < 0.8:
                     masked_ids[i] = self.vocab.mask_index
