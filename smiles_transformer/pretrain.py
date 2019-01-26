@@ -166,7 +166,7 @@ def main():
         print("EP%d Train, loss=" % (epoch), loss, "accuracy=", acc)
         with open(log_dir + '/' + args.name + '.csv', 'a') as f:
             f.write('%d,%f,%f,' %(epoch, loss, acc))
-        
+    
         trainer.save(epoch, save_dir) # Save model
         
         loss, acc = trainer.test(epoch)
