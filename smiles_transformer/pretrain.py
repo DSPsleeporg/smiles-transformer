@@ -2,6 +2,7 @@ import argparse
 import os
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 from torch.optim import Adam
 from torch.utils.data import DataLoader
 from tqdm import tqdm
@@ -9,12 +10,23 @@ from tqdm import tqdm
 from bert import BERT, BERTLM
 from dataset import STDataset
 from build_vocab import WordVocab
+import numpy as np
+
+class HLoss(nn.Module):
+    def __init__(self):
+        super(HLoss, self).__init__()
+
+    def forward(self, x):
+        b = F.softmax(x, dim=1) * F.log_softmax(x, dim=1)
+        b = b.sum(dim=1)
+        b = b.mean()
+        return b
 
 class STTrainer:
     def __init__(self, bert: BERT, vocab_size: int,
                  train_dataloader: DataLoader, test_dataloader: DataLoader = None,
                  lr: float = 1e-4, betas=(0.9, 0.999), weight_decay: float = 0.01,
-                 log_freq: int = 10, gpu_ids=[]):
+                 log_freq: int = 10, gpu_ids=[], vocab=None):
         """
         :param bert: BERT model
         :param vocab_size: vocabに含まれるトータルの単語数
@@ -40,7 +52,9 @@ class STTrainer:
 
         self.optim = Adam(self.model.parameters(), lr=lr, betas=betas, weight_decay=weight_decay)
         self.criterion = nn.NLLLoss()
+        self.ent_norm = HLoss()
         self.log_freq = log_freq
+        self.vocab = vocab
         print("Total Parameters:", sum([p.nelement() for p in self.model.parameters()]))
         
 
@@ -71,7 +85,8 @@ class STTrainer:
             tsm, msm = self.model.forward(data["bert_input"], data["segment_embd"])
             loss_tsm = self.criterion(tsm, data["is_same"])
             loss_msm = self.criterion(msm.transpose(1, 2), data["bert_label"])
-            loss = loss_tsm + loss_msm
+            loss_h  = self.ent_norm(msm.transpose(1, 2))
+            loss = loss_tsm + loss_msm + loss_h
             if train:
                 self.optim.zero_grad()
                 loss.backward()
@@ -92,8 +107,13 @@ class STTrainer:
             }
             if i % self.log_freq == 0:
                 data_iter.write(str(post_fix))
-                # with open('../result/log/ST.csv', 'a') as f:
-                #     f.write('%d,%f,%f\n' %(i, avg_loss/(i+1), total_correct/total_element*100))
+                print('*'*10)  
+                print(loss_h.item())
+                print(''.join([self.vocab.itos[j] for j in data['bert_input'][0]]).replace('<pad>', ' ').replace('<mask>', '?').replace('<eos>', '!').replace('<sos>', '!'))
+                print(''.join([self.vocab.itos[j] for j in data['bert_label'][0]]).replace('<pad>', ' ').replace('<eos>', '!').replace('<sos>', '!'))
+                tmp = np.argmax(msm.transpose(1, 2)[0].detach().cpu().numpy(), axis=0) 
+                print(''.join([self.vocab.itos[j] for j in tmp]).replace('<pad>', ' ').replace('<eos>', '!').replace('<sos>', '!'))
+                print('*'*10)
         return  avg_loss/len(data_iter), total_correct*100.0/total_element # Total loss and TSM accuracy
 
     def save(self, epoch, save_dir):
@@ -147,7 +167,7 @@ def main():
     print("Creating BERT Trainer")
     trainer = STTrainer(bert, len(vocab), train_dataloader=train_data_loader, test_dataloader=test_data_loader,
                         lr=args.lr, betas=(args.beta1, args.beta2), weight_decay=args.weight_decay,
-                        log_freq=args.log_freq, gpu_ids=args.gpu)
+                        log_freq=args.log_freq, gpu_ids=args.gpu, vocab=train_dataset.vocab)
 
     if not os.path.exists(args.out_dir):
         os.makedirs(args.out_dir)

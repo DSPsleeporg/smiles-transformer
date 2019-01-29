@@ -12,8 +12,9 @@ class Randomizer(object):
         self.sme = SmilesEnumerator()
     
     def __call__(self, sm):
-        sm = self.random_transform(sm)
-        return split(sm)
+        sm = self.sme.randomize_smiles(sm) # Random transoform
+        sm = split(sm) # Spacing
+        return sm.split() # List
 
     def random_transform(self, sm):
         '''
@@ -86,11 +87,11 @@ class STDataset(Dataset):
             else:  # Do not mask when predicting
                 prob = 1.0
 
-            if prob > 0.05:
+            if prob > 0.15:
                 masked_ids[i] = self.vocab.stoi.get(token, self.vocab.unk_index)
                 ans_ids[i] = 0
             else: # Mask
-                prob /= 0.05
+                prob /= 0.15
                 # 80% randomly change token to mask token
                 if prob < 0.8:
                     masked_ids[i] = self.vocab.mask_index
