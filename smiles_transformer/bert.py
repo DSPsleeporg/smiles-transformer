@@ -178,6 +178,44 @@ class BERTLM(nn.Module):
         x = self.bert(x, segment_label)
         return self.tsm(x), self.msm(x)
 
+class BERTTSM(nn.Module):
+    """
+    BERT Language Model
+    Two SMILES Match
+    """
+
+    def __init__(self, bert: BERT):
+        """
+        :param bert: BERT model which should be trained
+        :param vocab_size: total vocab size for masked_lm
+        """
+
+        super().__init__()
+        self.bert = bert
+        self.tsm = TwoSmilesMatch(self.bert.hidden)
+
+    def forward(self, x, segment_label):
+        x = self.bert(x, segment_label)
+        return self.tsm(x)
+
+class BERTMSM(nn.Module):
+    """
+    BERT Language ModelMasked SMILES Model
+    """
+
+    def __init__(self, bert: BERT, vocab_size):
+        """
+        :param bert: BERT model which should be trained
+        :param vocab_size: total vocab size for masked_lm
+        """
+
+        super().__init__()
+        self.bert = bert
+        self.msm = MaskedSmilesModel(self.bert.hidden, vocab_size)
+
+    def forward(self, x, segment_label):
+        x = self.bert(x, segment_label)
+        return self.msm(x)
 
 class TwoSmilesMatch(nn.Module):
     """
