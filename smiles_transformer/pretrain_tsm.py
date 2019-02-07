@@ -94,10 +94,6 @@ class TSMTrainer:
             }
             if i % self.log_freq == 0:
                 data_iter.write(str(post_fix))
-                print('*'*10)  
-                print(''.join([self.vocab.itos[j] for j in data['bert_input'][0]]).replace('<pad>', ' ').replace('<mask>', '?').replace('<eos>', '!').replace('<sos>', '!'))
-                print(tsm[0], data['is_same'][0])
-                print('*'*10)
         return  avg_loss/len(data_iter), total_correct*100.0/total_element # Total loss and TSM accuracy
 
     def save(self, epoch, save_dir):
@@ -167,14 +163,14 @@ def main():
     print("Training Start")
     for epoch in tqdm(range(args.n_epoch)):
         loss, acc = trainer.train(epoch)
-        print("EP%d Train, loss=" % (epoch), loss, "accuracy=", acc)
+        print('EP%d Train| loss:{:.4f}, accuracy{:.4f}'.format(loss, acc))
         with open(log_dir + '/' + args.name + '.csv', 'a') as f:
             f.write('%d,%f,%f,' %(epoch, loss, acc))
     
         trainer.save(epoch, save_dir) # Save model
         
         loss, acc = trainer.test(epoch)
-        print("EP%d Test, loss=" % (epoch), loss, "accuracy=", acc)
+        print('EP%d Test | loss:{:.4f}, accuracy{:.4f}'.format(loss, acc))
         with open(log_dir + '/' + args.name + '.csv', 'a') as f:
             f.write('%f,%f\n' %(loss, acc))
 

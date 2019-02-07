@@ -170,10 +170,13 @@ class MSMDataset(Dataset):
         self.seq_len = seq_len
         self.is_train = is_train
         self.transform = transform
-        df = pd.read_csv(corpus_path)
-        self.data_size = len(df)
-        self.firsts = df['first'].values
-        self.seconds = df['second'].values
+        with open(corpus_path) as f:
+            lines = f.readlines()
+        self.firsts = [l[:-1] for l in lines]
+        #df = pd.read_csv(corpus_path)
+        del lines
+        self.data_size = len(self.firsts)
+        #self.firsts = df['first'].values
 
     def __len__(self):
         return self.data_size
