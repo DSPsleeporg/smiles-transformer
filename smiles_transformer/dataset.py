@@ -125,8 +125,8 @@ class TSMDataset(Dataset):
 
     def __getitem__(self, item):
         sm1, (sm2, is_same_label) = self.firsts[item], self.get_random_pair(item)
-        sm1 = self.encode(self.transform(sm1)) # List of IDs
-        sm2 = self.encode(self.transform(sm2)) # List of IDs
+        sm1 = self.encode(sm1) # List of IDs
+        sm2 = self.encode(sm2) # List of IDs
 
         # [CLS] tag = SOS tag, [SEP] tag = EOS tag
         sm1 = [self.vocab.sos_index] + sm1 + [self.vocab.eos_index]
@@ -170,13 +170,9 @@ class MSMDataset(Dataset):
         self.seq_len = seq_len
         self.is_train = is_train
         self.transform = transform
-        with open(corpus_path) as f:
-            lines = f.readlines()
-        self.firsts = [l[:-1] for l in lines]
-        #df = pd.read_csv(corpus_path)
-        del lines
+        df = pd.read_csv(corpus_path)
+        self.firsts = df['first'].values
         self.data_size = len(self.firsts)
-        #self.firsts = df['first'].values
 
     def __len__(self):
         return self.data_size

@@ -125,7 +125,7 @@ class STTrainer:
         :return: final_output_path
         """
         output_path = save_dir + '/ep_{:02}.pkl'.format(epoch)
-        torch.save(self.bert.cpu(), output_path)
+        torch.save(self.bert.state_dict(), output_path)
         self.bert.to(self.device)
         print("EP:%d Model Saved on:" % epoch, output_path)
 
@@ -150,6 +150,7 @@ def main():
     parser.add_argument('--weight-decay', type=float, default=0.01, help='dropout rate')
     parser.add_argument('--log-freq', type=int, default=100, help='log frequency')
     parser.add_argument('--gpu', metavar='N', type=int, nargs='+', help='list of GPU IDs to use')
+    parser.add_argument('--checkpoint', '-c', type=str, default=None, help='Parameter to load')
     args = parser.parse_args()
 
     print("Loading Vocab", args.vocab)
@@ -163,6 +164,8 @@ def main():
     test_data_loader = DataLoader(test_dataset, batch_size=args.batch_size, num_workers=args.n_worker) 
     print("Building BERT model")
     bert = BERT(len(vocab), hidden=args.hidden, n_layers=args.n_layer, attn_heads=args.n_head, dropout=args.dropout)
+    if args.checkpoint:
+        bert.load_state_dict(torch.load(args.checkpoint))
     bert.cuda()
     print("Creating BERT Trainer")
     trainer = STTrainer(bert, len(vocab), train_dataloader=train_data_loader, test_dataloader=test_data_loader,
