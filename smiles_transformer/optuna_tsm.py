@@ -6,6 +6,7 @@ import torch.nn.functional as F
 from torch.optim import Adam
 from torch.utils.data import DataLoader
 from tqdm import tqdm
+import optuna
 
 from bert import BERT, BERTTSM
 from dataset import TSMDataset
@@ -16,7 +17,7 @@ class TSMTrainer:
     def __init__(self, bert: BERT, vocab_size: int,
                  train_dataloader: DataLoader, test_dataloader: DataLoader = None,
                  lr: float = 1e-4, betas=(0.9, 0.999), weight_decay: float = 0.01,
-                 log_freq: int = 10, gpu_ids=[], vocab=None):
+                 gpu_ids=[], vocab=None):
         """
         :param bert: BERT model
         :param vocab_size: vocabに含まれるトータルの単語数
@@ -26,7 +27,6 @@ class TSMTrainer:
         :param betas: Adam optimizer betas
         :param weight_decay: Adam optimizer weight decay param
         :param with_cuda: traning with cuda
-        :param log_freq: logを表示するiterationの頻度
         """
 
         # GPU環境において、GPUを指定しているかのフラグ
@@ -42,9 +42,7 @@ class TSMTrainer:
 
         self.optim = Adam(self.model.parameters(), lr=lr, betas=betas, weight_decay=weight_decay)
         self.criterion = nn.NLLLoss()
-        self.log_freq = log_freq
         self.vocab = vocab
-        print("Total Parameters:", sum([p.nelement() for p in self.model.parameters()]))
         
 
     def train(self, epoch):
@@ -84,99 +82,62 @@ class TSMTrainer:
             avg_loss += loss.item()
             total_correct += correct
             total_element += data["is_same"].nelement()
-
-            post_fix = {
-                "epoch": epoch,
-                "iter": i,
-                "avg_loss": avg_loss / (i + 1),
-                "avg_acc": total_correct / total_element * 100,
-                "loss": loss.item()
-            }
-            if i % self.log_freq == 0:
-                data_iter.write(str(post_fix))
         return  avg_loss/len(data_iter), total_correct*100.0/total_element # Total loss and TSM accuracy
 
-    def save(self, epoch, save_dir):
-        """
-        Saving the current BERT model on file_path
+    
+def get_trainer(trial, args, vocab, train_data_loader, test_data_loader):
+    hiddens = [128, 256, 512, 1024]
+    hidden = trial.suggest_categorical('hidden', hiddens)
+    n_layers = [2, 3, 4, 6, 8]
+    n_layer = trial.suggest_categorical('n_layer', n_layers)
+    n_heads = [2, 4, 8]
+    n_head = trial.suggest_categorical('n_head', n_heads)
+    lr = trial.suggest_loguniform('lr', 1e-5, 1e-1)
 
-        :param epoch: current epoch number
-        :param file_path: model output path which gonna be file_path+"ep%d" % epoch
-        :return: final_output_path
-        """
-        output_path = save_dir + '/ep_{:03}.pkl'.format(epoch)
-        torch.save(self.bert.state_dict(), output_path)
-        self.bert.to(self.device)
-        print("EP:%d Model Saved on:" % epoch, output_path)
+    bert = BERT(len(vocab), hidden=hidden, n_layers=n_layer, attn_heads=n_head, dropout=args.dropout)
+    bert.cuda()
+    trainer = TSMTrainer(bert, len(vocab), train_dataloader=train_data_loader, test_dataloader=test_data_loader,
+                        lr=lr, betas=(args.beta1, args.beta2), weight_decay=args.weight_decay,
+                        gpu_ids=args.gpu, vocab=vocab)
+    return trainer
+
+
+
 
 def main():
     parser = argparse.ArgumentParser(description='Pretrain SMILES Transformer')
-    parser.add_argument('--n_epoch', '-e', type=int, default=100, help='number of epochs')
+    parser.add_argument('--n_epoch', '-e', type=int, default=300, help='number of epochs')
+    parser.add_argument('--n_trial', '-t', type=int, default=100, help='number of optuna trials')
     parser.add_argument('--vocab', '-v', type=str, default='data/vocab.pkl', help='vocabulary (.pkl)')
     parser.add_argument('--train_data', type=str, default='data/chembl24_bert_train.csv', help='train corpus (.csv)')
     parser.add_argument('--test_data', type=str, default='data/chembl24_bert_test.csv', help='test corpus (.csv)')
-    parser.add_argument('--out-dir', '-o', type=str, default='../result', help='output directory')
     parser.add_argument('--name', '-n', type=str, default='ST', help='model name')
     parser.add_argument('--seq_len', type=int, default=203, help='maximum length of the paired seqence')
-    parser.add_argument('--batch_size', '-b', type=int, default=256, help='batch size')
+    parser.add_argument('--batch_size', '-b', type=int, default=16, help='batch size')
     parser.add_argument('--n_worker', '-w', type=int, default=16, help='number of workers')
-    parser.add_argument('--hidden', type=int, default=256, help='length of hidden vector')
-    parser.add_argument('--n_layer', '-l', type=int, default=4, help='number of layers')
-    parser.add_argument('--n_head', type=int, default=4, help='number of attention heads')
     parser.add_argument('--dropout', '-d', type=float, default=0.1, help='dropout rate')
-    parser.add_argument('--lr', type=float, default=1e-3, help='Adam learning rate')
     parser.add_argument('--beta1', type=float, default=0.9, help='Adam beta1')
     parser.add_argument('--beta2', type=float, default=0.999, help='Adam beta2')
     parser.add_argument('--weight-decay', type=float, default=0.01, help='dropout rate')
-    parser.add_argument('--log-freq', type=int, default=100, help='log frequency')
     parser.add_argument('--gpu', metavar='N', type=int, nargs='+', help='list of GPU IDs to use')
-    parser.add_argument('--checkpoint', '-c', type=str, default=None, help='Parameter to load')
     args = parser.parse_args()
 
-    print("Loading Vocab", args.vocab)
     vocab = WordVocab.load_vocab(args.vocab)
-    print("Loading Train Dataset", args.train_data)
     train_dataset = TSMDataset(args.train_data, vocab, seq_len=args.seq_len)
-    print("Loading Test Dataset", args.test_data)
     test_dataset = TSMDataset(args.test_data, vocab, seq_len=args.seq_len)
-    print("Creating Dataloader")
     train_data_loader = DataLoader(train_dataset, batch_size=args.batch_size, num_workers=args.n_worker)
-    test_data_loader = DataLoader(test_dataset, batch_size=args.batch_size, num_workers=args.n_worker) 
-    print("Building BERT model")
-    bert = BERT(len(vocab), hidden=args.hidden, n_layers=args.n_layer, attn_heads=args.n_head, dropout=args.dropout)
-    if args.checkpoint:
-        print('Load', args.checkpoint)
-        bert.load_state_dict(torch.load(args.checkpoint))
-    bert.cuda()
-    print("Creating BERT Trainer")
-    trainer = TSMTrainer(bert, len(vocab), train_dataloader=train_data_loader, test_dataloader=test_data_loader,
-                        lr=args.lr, betas=(args.beta1, args.beta2), weight_decay=args.weight_decay,
-                        log_freq=args.log_freq, gpu_ids=args.gpu, vocab=vocab)
+    test_data_loader = DataLoader(test_dataset, batch_size=args.batch_size, num_workers=args.n_worker)
 
-    if not os.path.exists(args.out_dir):
-        os.makedirs(args.out_dir)
-    save_dir = os.path.join(args.out_dir, args.name)
-    if not os.path.exists(save_dir):
-        os.makedirs(save_dir)
-    log_dir = os.path.join(args.out_dir, 'log')
-    if not os.path.exists(log_dir):
-        os.makedirs(log_dir)
-    with open(log_dir + '/' + args.name + '.csv', 'a') as f:
-        f.write('epoch,train_loss,train_acc,test_loss,test_acc\n')
+    def objective(trial):
+        trainer = get_trainer(trial, args, vocab, train_data_loader, test_data_loader)
+        for epoch in tqdm(range(args.n_epoch)):
+            loss, acc = trainer.train(epoch)            
+            loss, acc = trainer.test(epoch)
+        print(acc)
+        return loss
 
-    print("Training Start")
-    for epoch in tqdm(range(args.n_epoch)):
-        loss, acc = trainer.train(epoch)
-        print('EP%d Train| loss:{:.4f}, accuracy{:.4f}'.format(loss, acc))
-        with open(log_dir + '/' + args.name + '.csv', 'a') as f:
-            f.write('%d,%f,%f,' %(epoch, loss, acc))
-        if epoch%10==9:
-            trainer.save(epoch, save_dir) # Save model
-        
-        loss, acc = trainer.test(epoch)
-        print('EP%d Test | loss:{:.4f}, accuracy{:.4f}'.format(loss, acc))
-        with open(log_dir + '/' + args.name + '.csv', 'a') as f:
-            f.write('%f,%f\n' %(loss, acc))
+    study = optuna.create_study()
+    study.optimize(objective, n_trials=args.n_trial)
 
 if __name__=='__main__':
     main()

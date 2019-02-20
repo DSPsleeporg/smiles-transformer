@@ -70,6 +70,7 @@ class MSMTrainer:
 
         self.optim = Adam(self.model.parameters(), lr=lr, betas=betas, weight_decay=weight_decay)
         self.criterion = MyLoss()
+        #self.criterion = nn.NLLLoss()
         self.log_freq = log_freq
         self.vocab = vocab
         print("Total Parameters:", sum([p.nelement() for p in self.model.parameters()]))
@@ -172,12 +173,13 @@ def main():
     print("Building BERT model")
     bert = BERT(len(vocab), hidden=args.hidden, n_layers=args.n_layer, attn_heads=args.n_head, dropout=args.dropout)
     if args.checkpoint:
+        print('Load', args.checkpoint)
         bert.load_state_dict(torch.load(args.checkpoint))
     bert.cuda()
     print("Creating BERT Trainer")
     trainer = MSMTrainer(bert, len(vocab), train_dataloader=train_data_loader, test_dataloader=test_data_loader,
                         lr=args.lr, betas=(args.beta1, args.beta2), weight_decay=args.weight_decay,
-                        log_freq=args.log_freq, gpu_ids=args.gpu, vocab=train_dataset.vocab)
+                        log_freq=args.log_freq, gpu_ids=args.gpu, vocab=vocab)
 
     if not os.path.exists(args.out_dir):
         os.makedirs(args.out_dir)

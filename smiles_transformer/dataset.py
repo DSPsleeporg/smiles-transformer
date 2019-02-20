@@ -125,6 +125,7 @@ class TSMDataset(Dataset):
 
     def __getitem__(self, item):
         sm1, (sm2, is_same_label) = self.firsts[item], self.get_random_pair(item)
+        # Not randamizing
         sm1 = self.encode(sm1) # List of IDs
         sm2 = self.encode(sm2) # List of IDs
 

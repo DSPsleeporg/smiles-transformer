@@ -170,7 +170,7 @@ def main():
     print("Creating BERT Trainer")
     trainer = STTrainer(bert, len(vocab), train_dataloader=train_data_loader, test_dataloader=test_data_loader,
                         lr=args.lr, betas=(args.beta1, args.beta2), weight_decay=args.weight_decay,
-                        log_freq=args.log_freq, gpu_ids=args.gpu, vocab=train_dataset.vocab)
+                        log_freq=args.log_freq, gpu_ids=args.gpu, vocab=vocab)
 
     if not os.path.exists(args.out_dir):
         os.makedirs(args.out_dir)
