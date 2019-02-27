@@ -92,7 +92,7 @@ def get_trainer(trial, args, vocab, train_data_loader, test_data_loader):
     n_layer = trial.suggest_categorical('n_layer', n_layers)
     n_heads = [2, 4, 8]
     n_head = trial.suggest_categorical('n_head', n_heads)
-    lr = trial.suggest_loguniform('lr', 1e-5, 1e-1)
+    lr = trial.suggest_loguniform('lr', 1e-6, 1e-1)
 
     bert = BERT(len(vocab), hidden=hidden, n_layers=n_layer, attn_heads=n_head, dropout=args.dropout)
     bert.cuda()
