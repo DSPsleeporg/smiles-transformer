@@ -6,6 +6,8 @@ from torch.utils.data import Dataset, DataLoader
 from enumerator import SmilesEnumerator
 from utils import split
 
+PAD = 0
+
 class Randomizer(object):
 
     def __init__(self):
@@ -89,7 +91,7 @@ class STDataset(Dataset):
 
             if prob > 0.15:
                 masked_ids[i] = self.vocab.stoi.get(token, self.vocab.unk_index)
-                ans_ids[i] = 0
+                ans_ids[i] = PAD
             else: # Mask
                 prob /= 0.15
                 # 80% randomly change token to mask token
@@ -216,7 +218,7 @@ class MSMDataset(Dataset):
 
             if prob > 0.15:
                 masked_ids[i] = self.vocab.stoi.get(token, self.vocab.unk_index)
-                ans_ids[i] = 0
+                ans_ids[i] = PAD
             else: # Mask
                 prob /= 0.15
                 # 80% randomly change token to mask token
