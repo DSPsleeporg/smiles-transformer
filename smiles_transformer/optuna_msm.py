@@ -169,9 +169,8 @@ def main():
     def objective(trial):
         trainer = get_trainer(trial, args, vocab, train_data_loader, test_data_loader)
         for epoch in tqdm(range(args.n_epoch)):
-            loss, acc = trainer.train(epoch)            
-            loss, acc = trainer.test(epoch)
-        print(acc)
+            loss = trainer.train(epoch)            
+            loss = trainer.test(epoch)
         return loss
 
     study = optuna.create_study()
