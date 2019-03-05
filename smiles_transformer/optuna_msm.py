@@ -8,7 +8,7 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 import optuna
 
-from bert import BERT, BERTTSM
+from bert import BERT, BERTMSM
 from dataset import MSMDataset
 from build_vocab import WordVocab
 import numpy as np
