@@ -17,28 +17,25 @@ PAD = 0
 class MyLoss(nn.Module):
     def __init__(self):
         super(MyLoss, self).__init__()
+        self.nll = nn.NLLLoss()
+        self.vocab_size = 45
 
     def forward(self, ys, ts):
-        nll = nn.NLLLoss()
-
         loss = 0
         for y,t in  zip(ys,ts):
-            #print(y.shape, t.shape)
             b = torch.masked_select(t, t==PAD)
             l = len(b)
             b = b.reshape(1,l)
-            a = torch.masked_select(y, t==PAD).reshape(1,45,l)
-            loss_1 = nll(a, b)/2 # paddding loss
+            a = torch.masked_select(y, t==PAD).reshape(1,self.vocab_size,l)
+            loss += self.nll(a, b)/2 # paddding loss
             b = torch.masked_select(t, t!=PAD)
             l = len(b)
             if l>0:
                 b = b.reshape(1,l)
-                a = torch.masked_select(y, t!=PAD).reshape(1,45,l)
-                loss_2 = nll(a, b) # Not padding loss
-                loss = loss + loss_1 + loss_2
-            else:
-                loss = loss + loss_1
-        return loss
+                a = torch.masked_select(y, t!=PAD).reshape(1,self.vocab_size,l)
+                loss += self.nll(a, b) # Not padding loss
+
+        return loss/len(ys)
 
 class MSMTrainer:
     def __init__(self, bert: BERT, vocab_size: int,
@@ -74,7 +71,6 @@ class MSMTrainer:
 
         self.log_freq = log_freq
         self.vocab = vocab
-        print("Total Parameters:", sum([p.nelement() for p in self.model.parameters()]))
         
 
     def train(self, epoch):
@@ -113,14 +109,6 @@ class MSMTrainer:
                 "avg_loss": avg_loss / (i + 1),
                 "loss": loss.item()
             }
-            if i % self.log_freq == 0:
-                data_iter.write(str(post_fix))
-                print('*'*10)  
-                print(''.join([self.vocab.itos[j] for j in data['bert_input'][0]]).replace('<pad>', ' ').replace('<mask>', '?').replace('<eos>', '!').replace('<sos>', '!'))
-                print(''.join([self.vocab.itos[j] for j in data['bert_label'][0]]).replace('<pad>', ' ').replace('<eos>', '!').replace('<sos>', '!'))
-                tmp = np.argmax(msm.transpose(1, 2)[0].detach().cpu().numpy(), axis=0) 
-                print(''.join([self.vocab.itos[j] for j in tmp]).replace('<pad>', ' ').replace('<eos>', '!').replace('<sos>', '!'))
-                print('*'*10)
         return  avg_loss/len(data_iter) # Total loss
     
 def get_trainer(trial, args, vocab, train_data_loader, test_data_loader):

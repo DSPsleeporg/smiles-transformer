@@ -17,28 +17,25 @@ PAD = 0
 class MyLoss(nn.Module):
     def __init__(self):
         super(MyLoss, self).__init__()
+        self.nll = nn.NLLLoss()
+        self.vocab_size = 45
 
     def forward(self, ys, ts):
-        nll = nn.NLLLoss()
-
         loss = 0
         for y,t in  zip(ys,ts):
-            #print(y.shape, t.shape)
             b = torch.masked_select(t, t==PAD)
             l = len(b)
             b = b.reshape(1,l)
-            a = torch.masked_select(y, t==PAD).reshape(1,45,l)
-            loss_1 = nll(a, b)/2 # paddding loss
+            a = torch.masked_select(y, t==PAD).reshape(1,self.vocab_size,l)
+            loss += self.nll(a, b)/2 # paddding loss
             b = torch.masked_select(t, t!=PAD)
             l = len(b)
             if l>0:
                 b = b.reshape(1,l)
-                a = torch.masked_select(y, t!=PAD).reshape(1,45,l)
-                loss_2 = nll(a, b) # Not padding loss
-                loss = loss + loss_1 + loss_2
-            else:
-                loss = loss + loss_1
-        return loss
+                a = torch.masked_select(y, t!=PAD).reshape(1,self.vocab_size,l)
+                loss += self.nll(a, b) # Not padding loss
+
+        return loss/len(ys)
 
 class MSMTrainer:
     def __init__(self, bert: BERT, vocab_size: int,
