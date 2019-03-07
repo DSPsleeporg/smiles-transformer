@@ -7,6 +7,7 @@ from torch.optim import Adam
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 import optuna
+from adabound import AdaBound
 
 from bert import BERT, BERTMSM
 from dataset import MSMDataset
@@ -65,9 +66,10 @@ class MSMTrainer:
         self.train_data = train_dataloader
         self.test_data = test_dataloader
 
-        self.optim = Adam(self.model.parameters(), lr=lr, betas=betas, weight_decay=weight_decay)
-        self.criterion = MyLoss()
-        #self.MSMLoss = nn.NLLLoss(ignore_index=PAD)
+        #self.optim = Adam(self.model.parameters(), lr=lr, betas=betas, weight_decay=weight_decay)
+        self.optim = AdaBound(self.model.parameters(), lr=lr, final_lr=0.1)
+        #self.criterion = MyLoss()
+        self.criterion = nn.NLLLoss()
 
         self.log_freq = log_freq
         self.vocab = vocab
