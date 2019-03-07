@@ -116,18 +116,22 @@ def get_trainer(trial, args, vocab, train_data_loader, test_data_loader):
     n_layer = trial.suggest_categorical('n_layer', n_layers)
     n_heads = [2, 4, 8]
     n_head = trial.suggest_categorical('n_head', n_heads)
+
+    vocab_size = len(vocab)
+    bert = BERT(vocab_size, hidden=hidden, n_layers=n_layer, attn_heads=n_head, dropout=args.dropout)
+    bert.cuda()
+
     optims = ['Adam', 'AdaBound']
     optim_name = trial.suggest_categorical('optimizer', optims)
     if optim_name=='Adam':
         lr = trial.suggest_loguniform('lr', 1e-6, 1e-1)
-        optim = Adam(self.model.parameters(), lr=lr, betas=(args.beta1, args.beta2), weight_decay=args.weight_decay)
+        optim = Adam(BERTMSM(bert, vocab_size).parameters(), lr=lr, betas=(args.beta1, args.beta2), weight_decay=args.weight_decay)
     else:
         lr = trial.suggest_loguniform('lr', 1e-6, 1e-1)
-        optim = AdaBound(self.model.parameters(), lr=lr, final_lr=0.1)
+        optim = AdaBound(BERTMSM(bert, vocab_size).parameters(), lr=lr, final_lr=0.1)
 
-    bert = BERT(len(vocab), hidden=hidden, n_layers=n_layer, attn_heads=n_head, dropout=args.dropout)
-    bert.cuda()
-    trainer = MSMTrainer(optim, bert, len(vocab), train_dataloader=train_data_loader, test_dataloader=test_data_loader,
+    
+    trainer = MSMTrainer(optim, bert, vocab_size, train_dataloader=train_data_loader, test_dataloader=test_data_loader,
                         gpu_ids=args.gpu, vocab=vocab)
     return trainer
 
