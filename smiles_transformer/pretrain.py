@@ -18,7 +18,7 @@ PAD = 0
 
 class STTrainer:
     def __init__(self, bert, vocab_size, train_dataloader, test_dataloader,
-                 lr=1e-4, betas=(0.9, 0.999), weight_decay=0.01, lr_decay=2,
+                 lr=1e-4, betas=(0.9, 0.999), weight_decay=1e-4, lr_decay=2,
                  log_freq=100, gpu_ids=[], vocab=None):
         """
         :param bert: BERT model
@@ -138,7 +138,7 @@ def main():
     parser.add_argument('--lr', type=float, default=1e-3, help='Adam learning rate')
     parser.add_argument('--beta1', type=float, default=0.9, help='Adam beta1')
     parser.add_argument('--beta2', type=float, default=0.999, help='Adam beta2')
-    parser.add_argument('--weight-decay', type=float, default=0.01, help='dropout rate')
+    parser.add_argument('--weight-decay', type=float, default=1e-4, help='dropout rate')
     parser.add_argument('--lr-decay', type=int, default=2, help='lr decay step size')
     parser.add_argument('--log-freq', type=int, default=100, help='log frequency')
     parser.add_argument('--gpu', metavar='N', type=int, nargs='+', help='list of GPU IDs to use')
@@ -161,7 +161,7 @@ def main():
     bert.cuda()
     print("Creating BERT Trainer")
     trainer = STTrainer(bert, len(vocab), train_dataloader=train_data_loader, test_dataloader=test_data_loader,
-                        lr=args.lr, betas=(args.beta1, args.beta2), weight_decay=args.weight_decay,
+                        lr=args.lr, betas=(args.beta1, args.beta2), weight_decay=args.weight_decay, lr_decay=args.lr_decay,
                         log_freq=args.log_freq, gpu_ids=args.gpu, vocab=vocab)
 
     if not os.path.exists(args.out_dir):
