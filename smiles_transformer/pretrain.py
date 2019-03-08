@@ -17,10 +17,9 @@ import numpy as np
 PAD = 0
 
 class STTrainer:
-    def __init__(self, bert: BERT, vocab_size: int,
-                 train_dataloader: DataLoader, test_dataloader: DataLoader = None,
-                 lr: float = 1e-4, betas=(0.9, 0.999), weight_decay: float = 0.01,
-                 log_freq: int = 10, gpu_ids=[], vocab=None):
+    def __init__(self, bert, vocab_size, train_dataloader, test_dataloader,
+                 lr=1e-4, betas=(0.9, 0.999), weight_decay=0.01, lr_decay=2,
+                 log_freq=100, gpu_ids=[], vocab=None):
         """
         :param bert: BERT model
         :param vocab_size: vocabに含まれるトータルの単語数
@@ -44,8 +43,8 @@ class STTrainer:
         self.train_data = train_dataloader
         self.test_data = test_dataloader
 
-        self.optim = AdaBound(self.model.parameters(), lr=lr, final_lr=0.1)
-        self.scheduler = lr_scheduler.StepLR(self.optim, 5, gamma=0.1) # multiply 0.1 by lr every 5 epochs
+        self.optim = AdaBound(self.model.parameters(), lr=lr, final_lr=0.1, weight_decay=weight_decay)
+        self.scheduler = lr_scheduler.StepLR(self.optim, lr_decay, gamma=0.1) # multiply 0.1 by lr every 2 epochs
         self.criterion = nn.NLLLoss()
         self.log_freq = log_freq
         self.vocab = vocab
@@ -81,7 +80,7 @@ class STTrainer:
             loss_msm = self.criterion(msm.transpose(1, 2), data["bert_label"])
             loss = loss_tsm + loss_msm
             if train:
-                self.scheduler.step()
+                self.scheduler.step() # LR scheduling
                 self.optim.zero_grad()
                 loss.backward()
                 self.optim.step()
@@ -141,6 +140,7 @@ def main():
     parser.add_argument('--beta1', type=float, default=0.9, help='Adam beta1')
     parser.add_argument('--beta2', type=float, default=0.999, help='Adam beta2')
     parser.add_argument('--weight-decay', type=float, default=0.01, help='dropout rate')
+    parser.add_argument('--lr-decay', type=int, default=2, help='lr decay step size')
     parser.add_argument('--log-freq', type=int, default=100, help='log frequency')
     parser.add_argument('--gpu', metavar='N', type=int, nargs='+', help='list of GPU IDs to use')
     parser.add_argument('--checkpoint', '-c', type=str, default=None, help='Parameter to load')
