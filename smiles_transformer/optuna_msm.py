@@ -100,13 +100,6 @@ class MSMTrainer:
                 self.optim.step()
 
             avg_loss += loss.item()
-
-            post_fix = {
-                "epoch": epoch,
-                "iter": i,
-                "avg_loss": avg_loss / (i + 1),
-                "loss": loss.item()
-            }
         return  avg_loss/len(data_iter) # Total loss
     
 def get_trainer(trial, args, vocab, train_data_loader, test_data_loader):
@@ -124,10 +117,10 @@ def get_trainer(trial, args, vocab, train_data_loader, test_data_loader):
     optims = ['Adam', 'AdaBound']
     optim_name = trial.suggest_categorical('optimizer', optims)
     if optim_name=='Adam':
-        lr = trial.suggest_loguniform('lr', 1e-6, 1e-1)
+        lr = trial.suggest_loguniform('lr', 1e-6, 1e-3)
         optim = Adam(BERTMSM(bert, vocab_size).parameters(), lr=lr, betas=(args.beta1, args.beta2), weight_decay=args.weight_decay)
     else:
-        lr = trial.suggest_loguniform('lr', 1e-6, 1e-1)
+        lr = trial.suggest_loguniform('lr', 1e-6, 1e-3)
         optim = AdaBound(BERTMSM(bert, vocab_size).parameters(), lr=lr, final_lr=0.1)
 
     

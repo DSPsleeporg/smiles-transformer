@@ -147,7 +147,7 @@ def main():
     parser.add_argument('--seq_len', type=int, default=203, help='maximum length of the paired seqence')
     parser.add_argument('--batch_size', '-b', type=int, default=256, help='batch size')
     parser.add_argument('--n_worker', '-w', type=int, default=16, help='number of workers')
-    parser.add_argument('--hidden', type=int, default=256, help='length of hidden vector')
+    parser.add_argument('--hidden', type=int, default=16, help='length of hidden vector')
     parser.add_argument('--n_layer', '-l', type=int, default=4, help='number of layers')
     parser.add_argument('--n_head', type=int, default=4, help='number of attention heads')
     parser.add_argument('--dropout', '-d', type=float, default=0.1, help='dropout rate')

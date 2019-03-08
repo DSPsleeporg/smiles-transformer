@@ -3,24 +3,18 @@ import os
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch.optim import Adam
+from torch.optim import Adam, lr_scheduler
 from torch.utils.data import DataLoader
 from tqdm import tqdm
+from adabound import AdaBound
 
 from bert import BERT, BERTLM
 from dataset import STDataset
 from build_vocab import WordVocab
 import numpy as np
 
-class HLoss(nn.Module):
-    def __init__(self):
-        super(HLoss, self).__init__()
 
-    def forward(self, x):
-        b = F.softmax(x, dim=1) * F.log_softmax(x, dim=1)
-        b = b.sum(dim=1)
-        b = b.mean()
-        return b
+PAD = 0
 
 class STTrainer:
     def __init__(self, bert: BERT, vocab_size: int,
@@ -50,9 +44,9 @@ class STTrainer:
         self.train_data = train_dataloader
         self.test_data = test_dataloader
 
-        self.optim = Adam(self.model.parameters(), lr=lr, betas=betas, weight_decay=weight_decay)
+        self.optim = AdaBound(self.model.parameters(), lr=lr, final_lr=0.1)
+        self.scheduler = lr_scheduler.StepLR(self.optim, 5, gamma=0.1) # multiply 0.1 by lr every 5 epochs
         self.criterion = nn.NLLLoss()
-        self.ent_norm = HLoss()
         self.log_freq = log_freq
         self.vocab = vocab
         print("Total Parameters:", sum([p.nelement() for p in self.model.parameters()]))
@@ -85,9 +79,9 @@ class STTrainer:
             tsm, msm = self.model.forward(data["bert_input"], data["segment_embd"])
             loss_tsm = self.criterion(tsm, data["is_same"])
             loss_msm = self.criterion(msm.transpose(1, 2), data["bert_label"])
-            loss_h  = self.ent_norm(msm.transpose(1, 2))
-            loss = loss_tsm + loss_msm + loss_h
+            loss = loss_tsm + loss_msm
             if train:
+                self.scheduler.step()
                 self.optim.zero_grad()
                 loss.backward()
                 self.optim.step()
@@ -107,8 +101,7 @@ class STTrainer:
             }
             if i % self.log_freq == 0:
                 data_iter.write(str(post_fix))
-                print('*'*10)  
-                print(loss_h.item())
+                print('*'*10) 
                 print(''.join([self.vocab.itos[j] for j in data['bert_input'][0]]).replace('<pad>', ' ').replace('<mask>', '?').replace('<eos>', '!').replace('<sos>', '!'))
                 print(''.join([self.vocab.itos[j] for j in data['bert_label'][0]]).replace('<pad>', ' ').replace('<eos>', '!').replace('<sos>', '!'))
                 tmp = np.argmax(msm.transpose(1, 2)[0].detach().cpu().numpy(), axis=0) 
@@ -137,8 +130,8 @@ def main():
     parser.add_argument('--test_data', type=str, default='data/chembl24_bert_test.csv', help='test corpus (.csv)')
     parser.add_argument('--out-dir', '-o', type=str, default='../result', help='output directory')
     parser.add_argument('--name', '-n', type=str, default='ST', help='model name')
-    parser.add_argument('--seq_len', type=int, default=203, help='maximum length of the paired seqence')
-    parser.add_argument('--batch_size', '-b', type=int, default=256, help='batch size')
+    parser.add_argument('--seq_len', type=int, default=220, help='maximum length of the paired seqence')
+    parser.add_argument('--batch_size', '-b', type=int, default=16, help='batch size')
     parser.add_argument('--n_worker', '-w', type=int, default=16, help='number of workers')
     parser.add_argument('--hidden', type=int, default=256, help='length of hidden vector')
     parser.add_argument('--n_layer', '-l', type=int, default=4, help='number of layers')
@@ -190,7 +183,8 @@ def main():
         with open(log_dir + '/' + args.name + '.csv', 'a') as f:
             f.write('%d,%f,%f,' %(epoch, loss, acc))
     
-        trainer.save(epoch, save_dir) # Save model
+        if epoch%10==9:
+            trainer.save(epoch, save_dir) # Save model
         
         loss, acc = trainer.test(epoch)
         print("EP%d Test, loss=" % (epoch), loss, "accuracy=", acc)
