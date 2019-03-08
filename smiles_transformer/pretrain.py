@@ -80,7 +80,6 @@ class STTrainer:
             loss_msm = self.criterion(msm.transpose(1, 2), data["bert_label"])
             loss = loss_tsm + loss_msm
             if train:
-                self.scheduler.step() # LR scheduling
                 self.optim.zero_grad()
                 loss.backward()
                 self.optim.step()
@@ -178,6 +177,7 @@ def main():
 
     print("Training Start")
     for epoch in tqdm(range(args.n_epoch)):
+        trainer.scheduler.step() # LR scheduling
         loss, acc = trainer.train(epoch)
         print("EP%d Train, loss=" % (epoch), loss, "accuracy=", acc)
         with open(log_dir + '/' + args.name + '.csv', 'a') as f:
