@@ -37,6 +37,10 @@ class STDataset(Dataset):
         self.data_size = len(df)
         self.firsts = df['first'].values
         self.seconds = df['second'].values
+        max_size = 10000
+        if not is_train and self.data_size>max_size:
+            self.firsts = self.firsts[:max_size]
+            self.seconds = self.seconds[:max_size]
 
     def __len__(self):
         return self.data_size
