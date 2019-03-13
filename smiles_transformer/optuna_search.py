@@ -65,6 +65,8 @@ class STTrainer:
         data_iter = tqdm(enumerate(data_loader), desc="EP_%s:%d" % (str_code, epoch), total=len(data_loader), bar_format="{l_bar}{r_bar}")
 
         avg_loss = 0.0
+        total_correct = 0
+        total_element = 0
 
         for i, data in data_iter:
             data = {key: value.to(self.device) for key, value in data.items()}
