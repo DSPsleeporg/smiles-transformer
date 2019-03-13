@@ -152,7 +152,7 @@ def main():
     print("Loading Test Dataset", args.test_data)
     test_dataset = STDataset(args.test_data, vocab, seq_len=args.seq_len)
     print("Creating Dataloader")
-    train_data_loader = DataLoader(train_dataset, batch_size=args.batch_size, num_workers=args.n_worker)
+    train_data_loader = DataLoader(train_dataset, batch_size=args.batch_size, num_workers=args.n_worker, shuffle=True)
     test_data_loader = DataLoader(test_dataset, batch_size=args.batch_size, num_workers=args.n_worker) 
     print("Building BERT model")
     bert = BERT(len(vocab), hidden=args.hidden, n_layers=args.n_layer, attn_heads=args.n_head, dropout=args.dropout)
