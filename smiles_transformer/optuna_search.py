@@ -99,7 +99,7 @@ def get_trainer(trial, args, vocab, train_data_loader, test_data_loader):
     bert.cuda()
 
     lr = trial.suggest_loguniform('lr', 1e-6, 1e-3)
-    final_lr = trial.suggest_loguniform('lr', 1e-4, 1e-1)
+    final_lr = trial.suggest_loguniform('final_lr', 1e-4, 1e-1)
     optim = AdaBound(BERTLM(bert, vocab_size).parameters(), lr=lr, final_lr=final_lr)
 
     trainer = STTrainer(optim, bert, vocab_size, train_dataloader=train_data_loader, test_dataloader=test_data_loader,
