@@ -18,7 +18,7 @@ PAD = 0
 
 class STTrainer:
     def __init__(self, bert, vocab_size, train_dataloader, test_dataloader,
-                 lr=1e-4, betas=(0.9, 0.999), weight_decay=1e-4, lr_decay=2,
+                 lr=1e-4, betas=(0.9, 0.999), final_lr=0.1, weight_decay=1e-4, lr_decay=2,
                  log_freq=100, gpu_ids=[], vocab=None):
         """
         :param bert: BERT model
@@ -43,7 +43,7 @@ class STTrainer:
         self.train_data = train_dataloader
         self.test_data = test_dataloader
 
-        self.optim = AdaBound(self.model.parameters(), lr=lr, final_lr=0.1, weight_decay=weight_decay)
+        self.optim = AdaBound(self.model.parameters(), lr=lr, final_lr=0.01, weight_decay=weight_decay)
         self.scheduler = lr_scheduler.StepLR(self.optim, lr_decay, gamma=0.1) # multiply 0.1 by lr every 2 epochs
         self.criterion = nn.NLLLoss()
         self.log_freq = log_freq
@@ -135,9 +135,10 @@ def main():
     parser.add_argument('--n_layer', '-l', type=int, default=4, help='number of layers')
     parser.add_argument('--n_head', type=int, default=4, help='number of attention heads')
     parser.add_argument('--dropout', '-d', type=float, default=0.1, help='dropout rate')
-    parser.add_argument('--lr', type=float, default=1e-3, help='Adam learning rate')
-    parser.add_argument('--beta1', type=float, default=0.9, help='Adam beta1')
-    parser.add_argument('--beta2', type=float, default=0.999, help='Adam beta2')
+    parser.add_argument('--lr', type=float, default=1e-3, help='AdaBound learning rate')
+    parser.add_argument('--beta1', type=float, default=0.9, help='AdaBound beta1')
+    parser.add_argument('--beta2', type=float, default=0.999, help='AdaBound beta2')
+    parser.add_argument('--final-lr', type=float, default=0.01, help='AdaBound final lr')
     parser.add_argument('--weight-decay', type=float, default=1e-4, help='dropout rate')
     parser.add_argument('--lr-decay', type=int, default=2, help='lr decay step size')
     parser.add_argument('--log-freq', type=int, default=100, help='log frequency')
@@ -161,7 +162,7 @@ def main():
     bert.cuda()
     print("Creating BERT Trainer")
     trainer = STTrainer(bert, len(vocab), train_dataloader=train_data_loader, test_dataloader=test_data_loader,
-                        lr=args.lr, betas=(args.beta1, args.beta2), weight_decay=args.weight_decay, lr_decay=args.lr_decay,
+                        lr=args.lr, betas=(args.beta1, args.beta2), final_lr=args.final_lr, weight_decay=args.weight_decay, lr_decay=args.lr_decay,
                         log_freq=args.log_freq, gpu_ids=args.gpu, vocab=vocab)
 
     if not os.path.exists(args.out_dir):
