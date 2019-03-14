@@ -184,8 +184,7 @@ def main():
         with open(log_dir + '/' + args.name + '.csv', 'a') as f:
             f.write('%d,%f,%f,' %(epoch, loss, acc))
     
-        if epoch%10==9:
-            trainer.save(epoch, save_dir) # Save model
+        trainer.save(epoch, save_dir) # Save model
         
         loss, acc = trainer.test(epoch)
         print("EP%d Test, loss=" % (epoch), loss, "accuracy=", acc)
