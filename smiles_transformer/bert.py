@@ -125,12 +125,12 @@ class BERT(nn.Module):
         return torch.cat(y, dim=2)
 
 class TokenEmbedding(nn.Embedding):
-    def __init__(self, vocab_size, embed_size=512):
+    def __init__(self, vocab_size, embed_size=20):
         super().__init__(vocab_size, embed_size, padding_idx=0)
 
 class PositionalEmbedding(nn.Module):
 
-    def __init__(self, d_model, max_len=512):
+    def __init__(self, d_model, max_len=220):
         super().__init__()
 
         pe = torch.zeros(max_len, d_model).float()
@@ -149,7 +149,7 @@ class PositionalEmbedding(nn.Module):
         return self.pe[:, :x.size(1)]
 
 class SegmentEmbedding(nn.Embedding):
-    def __init__(self, embed_size=512):
+    def __init__(self, embed_size=20):
         super().__init__(3, embed_size, padding_idx=0)
 
 class BERTEmbedding(nn.Module):
