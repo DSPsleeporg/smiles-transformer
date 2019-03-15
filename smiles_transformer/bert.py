@@ -109,6 +109,21 @@ class BERT(nn.Module):
             x = transformer.forward(x, mask)
         return x
 
+    def encode(self, x, segment_info):
+        """
+        Extract encoded vector from the last 2 layers
+        """
+        # xの中で0以上は1, 0未満は0として, maskテンソルを作る
+        mask = (x > 0).unsqueeze(1).repeat(1, x.size(1), 1).unsqueeze(1)
+
+        x = self.embedding(x, segment_info)
+        y = []
+        for i,transformer in enumerate(self.transformer_blocks):
+            x = transformer.forward(x, mask)
+            if len(self.transformer_blocks)-i<3:
+                y.append(x)
+        return torch.cat(y, dim=2)
+
 class TokenEmbedding(nn.Embedding):
     def __init__(self, vocab_size, embed_size=512):
         super().__init__(vocab_size, embed_size, padding_idx=0)
