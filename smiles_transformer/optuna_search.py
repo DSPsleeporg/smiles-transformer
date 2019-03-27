@@ -115,7 +115,7 @@ def main():
     parser.add_argument('--train_data', type=str, default='data/chembl24_bert_train.csv', help='train corpus (.csv)')
     parser.add_argument('--test_data', type=str, default='data/chembl24_bert_test.csv', help='test corpus (.csv)')
     parser.add_argument('--name', '-n', type=str, default='ST', help='model name')
-    parser.add_argument('--seq_len', type=int, default=203, help='maximum length of the paired seqence')
+    parser.add_argument('--seq_len', type=int, default=220, help='maximum length of the paired seqence')
     parser.add_argument('--batch_size', '-b', type=int, default=16, help='batch size')
     parser.add_argument('--n_worker', '-w', type=int, default=16, help='number of workers')
     parser.add_argument('--dropout', '-d', type=float, default=0.1, help='dropout rate')
