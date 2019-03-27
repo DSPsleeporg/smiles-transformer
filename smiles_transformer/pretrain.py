@@ -12,6 +12,7 @@ from bert import BERT, BERTLM
 from dataset import STDataset
 from build_vocab import WordVocab
 import numpy as np
+import utils
 
 
 PAD = 0
@@ -78,7 +79,14 @@ class STTrainer:
             tsm, msm = self.model.forward(data["bert_input"], data["segment_embd"])
             loss_tsm = self.criterion(tsm, data["is_same"])
             loss_msm = self.criterion(msm.transpose(1, 2), data["bert_label"])
-            loss = loss_tsm + loss_msm
+            filleds = utils.sample(msm)
+            smiles = []
+            for filled in filleds:
+                s1, s2 = self.num2str(filled)
+                smiles.append(s1)
+                smiles.append(s2)
+            loss_val = utils.loss_validity(smiles)
+            loss = loss_tsm + loss_msm + loss_val
             if train:
                 self.optim.zero_grad()
                 loss.backward()
@@ -95,14 +103,15 @@ class STTrainer:
                 "iter": i,
                 "avg_loss": avg_loss / (i + 1),
                 "avg_acc": total_correct / total_element * 100,
-                "loss": loss.item()
+                "loss": loss.item(),
+                'loss val': loss_val
             }
             if i % self.log_freq == 0:
                 data_iter.write(str(post_fix))
                 print('*'*10) 
                 print(''.join([self.vocab.itos[j] for j in data['bert_input'][0]]).replace('<pad>', ' ').replace('<mask>', '?').replace('<eos>', '!').replace('<sos>', '!'))
                 print(''.join([self.vocab.itos[j] for j in data['bert_label'][0]]).replace('<pad>', ' ').replace('<eos>', '!').replace('<sos>', '!'))
-                tmp = np.argmax(msm.transpose(1, 2)[0].detach().cpu().numpy(), axis=0) 
+                tmp = utils.sample(msm)[0]
                 print(''.join([self.vocab.itos[j] for j in tmp]).replace('<pad>', ' ').replace('<eos>', '!').replace('<sos>', '!'))
                 print('*'*10)
         return  avg_loss/len(data_iter), total_correct*100.0/total_element # Total loss and TSM accuracy
@@ -119,6 +128,17 @@ class STTrainer:
         torch.save(self.bert.state_dict(), output_path)
         self.bert.to(self.device)
         print("EP:%d Model Saved on:" % epoch, output_path)
+
+    def num2str(self, nums):
+        s = [self.vocab.itos[num] for num in nums]
+        s = ''.join(s).replace('<pad>', '')
+        ss = s.split('<eos>')
+        if len(ss)>=2:
+            return ss[0], s[1]
+        else:
+            sep = len(s)//2
+            return s[:sep], s[sep:]
+
 
 def main():
     parser = argparse.ArgumentParser(description='Pretrain SMILES Transformer')

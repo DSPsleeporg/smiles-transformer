@@ -1,6 +1,9 @@
 import torch
 import math
 import torch.nn as nn
+from rdkit import Chem
+from rdkit import rdBase
+rdBase.DisableLog('rdApp.*')
 
 # Split SMILES into words
 def split(sm):
@@ -173,3 +176,19 @@ class SublayerConnection(nn.Module):
 
     def forward(self, x, sublayer):
         return x + self.dropout(sublayer(self.norm(x)))
+
+# Sample SMILES from probablistic distribution
+def sample(msms):
+    ret = []
+    for msm in msms:
+        ret.append(torch.multinomial(msm.exp(), 1).squeeze())
+    return torch.stack(ret)
+
+def loss_validity(smiles):
+    loss = 0
+    for sm in smiles:
+        mol = Chem.MolFromSmiles(sm)
+        if mol is None:
+            loss += 1
+    return loss/len(smiles)
+
