@@ -13,6 +13,7 @@ from bert import BERT, BERTLM
 from dataset import STDataset
 from build_vocab import WordVocab
 import numpy as np
+import utils
 PAD = 0
 
 class STTrainer:
@@ -48,12 +49,12 @@ class STTrainer:
         
 
     def train(self, epoch):
-        loss = self.iteration(epoch, self.train_data)
-        return loss
+        ret = self.iteration(epoch, self.train_data)
+        return ret
 
     def test(self, epoch):
-        loss = self.iteration(epoch, self.test_data, train=False)
-        return loss
+        ret = self.iteration(epoch, self.test_data, train=False)
+        return ret
 
     def iteration(self, epoch, data_loader, train=True):
         """
@@ -65,7 +66,8 @@ class STTrainer:
         data_iter = tqdm(enumerate(data_loader), desc="EP_%s:%d" % (str_code, epoch), total=len(data_loader), bar_format="{l_bar}{r_bar}")
 
         avg_loss = 0.0
-        total_correct = 0
+        total_correct_1 = 0
+        total_correct_2 = 0
         total_element = 0
 
         for i, data in data_iter:
@@ -73,18 +75,37 @@ class STTrainer:
             tsm, msm = self.model.forward(data["bert_input"], data["segment_embd"])
             loss_tsm = self.criterion(tsm, data["is_same"])
             loss_msm = self.criterion(msm.transpose(1, 2), data["bert_label"])
-            loss = loss_tsm + loss_msm
+            filleds = utils.sample(msm)
+            smiles = []
+            for filled in filleds:
+                s1, s2 = self.num2str(filled)
+                smiles.append(s1)
+                smiles.append(s2)
+            loss_val = utils.loss_validity(smiles)
+            loss = loss_tsm + loss_msm + loss_val
             if train:
                 self.optim.zero_grad()
                 loss.backward()
                 self.optim.step()
 
             # TSM prediction accuracy
-            correct = tsm.argmax(dim=-1).eq(data["is_same"]).sum().item()
             avg_loss += loss.item()
-            total_correct += correct
+            correct1 = tsm.argmax(dim=-1).eq(data["is_same"]).sum().item()
+            total_correct_1 += correct1
+            correct2 = filleds.eq(data['bert_label']).sum().item()
+            total_correct_2 += correct2
             total_element += data["is_same"].nelement()
-        return  avg_loss/len(data_iter), total_correct*100.0/total_element # Total loss and TSM accuracy
+        return  avg_loss/len(data_iter), total_correct_1*100.0/total_element, total_correct_2*100.0/total_element 
+    
+    def num2str(self, nums):
+        s = [self.vocab.itos[num] for num in nums]
+        s = ''.join(s).replace('<pad>', '')
+        ss = s.split('<eos>')
+        if len(ss)>=2:
+            return ss[0], s[1]
+        else:
+            sep = len(s)//2
+            return s[:sep], s[sep:]
 
     
 def get_trainer(trial, args, vocab, train_data_loader, test_data_loader):
@@ -134,9 +155,9 @@ def main():
     def objective(trial):
         trainer = get_trainer(trial, args, vocab, train_data_loader, test_data_loader)
         for epoch in tqdm(range(args.n_epoch)):
-            loss, acc = trainer.train(epoch)            
-            loss, acc = trainer.test(epoch)
-        print(acc)
+            loss, acc1, acc2 = trainer.train(epoch)            
+            loss, acc1, acc2 = trainer.test(epoch)
+        print('2SM, MSM:', acc1, acc2)
         return loss
 
     study = optuna.create_study()
