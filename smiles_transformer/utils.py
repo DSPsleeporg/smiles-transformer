@@ -184,11 +184,11 @@ def sample(msms):
         ret.append(torch.multinomial(msm.exp(), 1).squeeze())
     return torch.stack(ret)
 
-def loss_validity(smiles):
+def validity(smiles):
     loss = 0
     for sm in smiles:
         mol = Chem.MolFromSmiles(sm)
         if mol is None:
             loss += 1
-    return loss/len(smiles)
+    return 1-loss/len(smiles)
 

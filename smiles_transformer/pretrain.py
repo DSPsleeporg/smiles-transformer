@@ -60,63 +60,53 @@ class STTrainer:
         loss, acc = self.iteration(epoch, self.test_data, train=False)
         return loss, acc
 
-    def iteration(self, epoch, data_loader, train=True):
+    def iteration(self, epoch, iter, data, data_iter, train=True):
         """
         :param epoch: 現在のepoch
         :param data_loader: torch.utils.data.DataLoader
         :param train: trainかtestかのbool値
         """
-        str_code = "train" if train else "test"
-        data_iter = tqdm(enumerate(data_loader), desc="EP_%s:%d" % (str_code, epoch), total=len(data_loader), bar_format="{l_bar}{r_bar}")
+        data = {key: value.to(self.device) for key, value in data.items()}
+        tsm, msm = self.model.forward(data["bert_input"], data["segment_embd"])
+        loss_tsm = self.criterion(tsm, data["is_same"])
+        loss_msm = self.criterion(msm.transpose(1, 2), data["bert_label"])
+        filleds = utils.sample(msm)
+        smiles = []
+        for filled in filleds:
+            s1, s2 = self.num2str(filled)
+            smiles.append(s1)
+            smiles.append(s2)
+        validity = utils.validity(smiles) * 100
+        loss = loss_tsm + loss_msm
+        if train:
+            self.optim.zero_grad()
+            loss.backward()
+            self.optim.step()
 
-        avg_loss = 0.0
-        total_correct = 0
-        total_element = 0
-
-        for i, data in data_iter:
-            # 0. batch_dataはGPU or CPUに載せる
-            data = {key: value.to(self.device) for key, value in data.items()}
-            tsm, msm = self.model.forward(data["bert_input"], data["segment_embd"])
-            loss_tsm = self.criterion(tsm, data["is_same"])
-            loss_msm = self.criterion(msm.transpose(1, 2), data["bert_label"])
-            filleds = utils.sample(msm)
-            smiles = []
-            for filled in filleds:
-                s1, s2 = self.num2str(filled)
-                smiles.append(s1)
-                smiles.append(s2)
-            loss_val = utils.loss_validity(smiles)
-            loss = loss_tsm + loss_msm + loss_val
-            if train:
-                self.optim.zero_grad()
-                loss.backward()
-                self.optim.step()
-
-            # TSM prediction accuracy
-            correct = tsm.argmax(dim=-1).eq(data["is_same"]).sum().item()
-            avg_loss += loss.item()
-            total_correct += correct
-            total_element += data["is_same"].nelement()
-
-            post_fix = {
-                "epoch": epoch,
-                "iter": i,
-                "avg_loss": avg_loss / (i + 1),
-                "avg_acc": total_correct / total_element * 100,
-                "loss": loss.item(),
-                'loss val': loss_val
+        # TSM prediction accuracy
+        n = data["is_same"].nelement()
+        acc_tsm = tsm.argmax(dim=-1).eq(data["is_same"]).sum().item()  / n * 100
+        acc_msm = filleds.eq(data['bert_label']).sum().item() / 220  / n * 100
+        post_fix = {
+                'Epoch': epoch,
+                'Iter': iter,
+                'Loss total': '{:.3f}'.format(loss.item()),
+                'Acc 2SM': '{:.3f}'.format(acc_tsm),
+                'Acc MSM': '{:.3f}'.format(acc_msm),
+                'Validity': '{:.3f}'.format(validity)
             }
-            if i % self.log_freq == 0:
-                data_iter.write(str(post_fix))
-                print('*'*10) 
-                print(''.join([self.vocab.itos[j] for j in data['bert_input'][0]]).replace('<pad>', ' ').replace('<mask>', '?').replace('<eos>', '!').replace('<sos>', '!'))
-                print(''.join([self.vocab.itos[j] for j in data['bert_label'][0]]).replace('<pad>', ' ').replace('<eos>', '!').replace('<sos>', '!'))
-                tmp = utils.sample(msm)[0]
-                print(''.join([self.vocab.itos[j] for j in tmp]).replace('<pad>', ' ').replace('<eos>', '!').replace('<sos>', '!'))
-                print('*'*10)
-        return  avg_loss/len(data_iter), total_correct*100.0/total_element # Total loss and TSM accuracy
 
-    def save(self, epoch, save_dir):
+        if iter % self.log_freq == 0:
+            data_iter.write(str(post_fix))
+            print(''.join([self.vocab.itos[j] for j in data['bert_input'][0]]).replace('<pad>', ' ').replace('<mask>', '?').replace('<eos>', '!').replace('<sos>', '!'))
+            print(''.join([self.vocab.itos[j] for j in data['bert_label'][0]]).replace('<pad>', ' ').replace('<eos>', '!').replace('<sos>', '!'))
+            tmp = utils.sample(msm)[0]
+            print(''.join([self.vocab.itos[j] for j in tmp]).replace('<pad>', ' ').replace('<eos>', '!').replace('<sos>', '!'))
+            print('')
+    
+        return loss.item(), loss_tsm.item(), loss_msm.item(), acc_tsm, acc_msm, validity
+
+    def save(self, epoch, iter, save_dir):
         """
         Saving the current BERT model on file_path
 
@@ -124,10 +114,9 @@ class STTrainer:
         :param file_path: model output path which gonna be file_path+"ep%d" % epoch
         :return: final_output_path
         """
-        output_path = save_dir + '/ep_{:02}.pkl'.format(epoch)
+        output_path = save_dir + '/ep{:02}_it{:06}.pkl'.format(epoch, iter)
         torch.save(self.bert.state_dict(), output_path)
         self.bert.to(self.device)
-        print("EP:%d Model Saved on:" % epoch, output_path)
 
     def num2str(self, nums):
         s = [self.vocab.itos[num] for num in nums]
@@ -170,18 +159,15 @@ def main():
     vocab = WordVocab.load_vocab(args.vocab)
     print("Loading Train Dataset", args.train_data)
     train_dataset = STDataset(args.train_data, vocab, seq_len=args.seq_len)
-    print("Loading Test Dataset", args.test_data)
-    test_dataset = STDataset(args.test_data, vocab, seq_len=args.seq_len)
     print("Creating Dataloader")
-    train_data_loader = DataLoader(train_dataset, batch_size=args.batch_size, num_workers=args.n_worker, shuffle=True)
-    test_data_loader = DataLoader(test_dataset, batch_size=args.batch_size, num_workers=args.n_worker) 
+    train_data_loader = DataLoader(train_dataset, batch_size=args.batch_size, num_workers=args.n_worker, shuffle=True) 
     print("Building BERT model")
     bert = BERT(len(vocab), hidden=args.hidden, n_layers=args.n_layer, attn_heads=args.n_head, dropout=args.dropout)
     if args.checkpoint:
         bert.load_state_dict(torch.load(args.checkpoint))
     bert.cuda()
     print("Creating BERT Trainer")
-    trainer = STTrainer(bert, len(vocab), train_dataloader=train_data_loader, test_dataloader=test_data_loader,
+    trainer = STTrainer(bert, len(vocab), train_dataloader=train_data_loader, test_dataloader=None,
                         lr=args.lr, betas=(args.beta1, args.beta2), final_lr=args.final_lr, weight_decay=args.weight_decay, lr_decay=args.lr_decay,
                         log_freq=args.log_freq, gpu_ids=args.gpu, vocab=vocab)
 
@@ -194,22 +180,19 @@ def main():
     if not os.path.exists(log_dir):
         os.makedirs(log_dir)
     with open(log_dir + '/' + args.name + '.csv', 'a') as f:
-        f.write('epoch,train_loss,train_acc,test_loss,test_acc\n')
+        f.write('epoch,iter,loss_tot,loss_2sm,loss_msm,acc_2sm,acc_msm,acc_val\n')
 
     print("Training Start")
     for epoch in tqdm(range(args.n_epoch)):
-        trainer.scheduler.step() # LR scheduling
-        loss, acc = trainer.train(epoch)
-        print("EP%d Train, loss=" % (epoch), loss, "accuracy=", acc)
-        with open(log_dir + '/' + args.name + '.csv', 'a') as f:
-            f.write('%d,%f,%f,' %(epoch, loss, acc))
-    
-        trainer.save(epoch, save_dir) # Save model
-        
-        loss, acc = trainer.test(epoch)
-        print("EP%d Test, loss=" % (epoch), loss, "accuracy=", acc)
-        with open(log_dir + '/' + args.name + '.csv', 'a') as f:
-            f.write('%f,%f\n' %(loss, acc))
+        data_iter = tqdm(enumerate(train_data_loader), desc="EP_{:d}".format(epoch), total=len(train_data_loader), bar_format="{l_bar}{r_bar}")
+        for iter, data in data_iter:
+            trainer.scheduler.step() # LR scheduling
+            loss, loss_tsm, loss_msm, acc_tsm, acc_msm, validity = trainer.iteration(epoch, iter, data, data_iter)
+            if iter % trainer.log_freq == 0:
+                with open(log_dir + '/' + args.name + '.csv', 'a') as f:
+                    f.write('{:d},{:d},{:.3f},{:.3f},{:.3f},{:.3f},{:.3f},{:.3f}\n'.format(epoch, iter, loss, loss_tsm, loss_msm, acc_tsm, acc_msm, validity))
+                if iter % (trainer.log_freq*10) == 0:
+                    trainer.save(epoch, iter, save_dir) # Save model
 
 if __name__=='__main__':
     main()
