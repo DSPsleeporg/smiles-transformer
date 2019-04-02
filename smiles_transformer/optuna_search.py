@@ -46,56 +46,36 @@ class STTrainer:
 
         self.log_freq = log_freq
         self.vocab = vocab
-        
 
-    def train(self, epoch):
-        ret = self.iteration(epoch, self.train_data)
-        return ret
-
-    def test(self, epoch):
-        ret = self.iteration(epoch, self.test_data, train=False)
-        return ret
-
-    def iteration(self, epoch, data_loader, train=True):
+    def iteration(self, data, train=True):
         """
         :param epoch: 現在のepoch
         :param data_loader: torch.utils.data.DataLoader
         :param train: trainかtestかのbool値
         """
-        str_code = "train" if train else "test"
-        data_iter = tqdm(enumerate(data_loader), desc="EP_%s:%d" % (str_code, epoch), total=len(data_loader), bar_format="{l_bar}{r_bar}")
+        data = {key: value.to(self.device) for key, value in data.items()}
+        tsm, msm = self.model.forward(data["bert_input"], data["segment_embd"])
+        loss_tsm = self.criterion(tsm, data["is_same"])
+        loss_msm = self.criterion(msm.transpose(1, 2), data["bert_label"])
+        filleds = utils.sample(msm)
+        smiles = []
+        for filled in filleds:
+            s1, s2 = self.num2str(filled)
+            smiles.append(s1)
+            smiles.append(s2)
+        validity = utils.validity(smiles) * 100
+        loss = loss_tsm + loss_msm
+        if train:
+            self.optim.zero_grad()
+            loss.backward()
+            self.optim.step()
 
-        avg_loss = 0.0
-        total_correct_1 = 0
-        total_correct_2 = 0
-        total_element = 0
-
-        for i, data in data_iter:
-            data = {key: value.to(self.device) for key, value in data.items()}
-            tsm, msm = self.model.forward(data["bert_input"], data["segment_embd"])
-            loss_tsm = self.criterion(tsm, data["is_same"])
-            loss_msm = self.criterion(msm.transpose(1, 2), data["bert_label"])
-            filleds = utils.sample(msm)
-            smiles = []
-            for filled in filleds:
-                s1, s2 = self.num2str(filled)
-                smiles.append(s1)
-                smiles.append(s2)
-            loss_val = utils.loss_validity(smiles)
-            loss = loss_tsm + loss_msm + loss_val
-            if train:
-                self.optim.zero_grad()
-                loss.backward()
-                self.optim.step()
-
-            # TSM prediction accuracy
-            avg_loss += loss.item()
-            correct1 = tsm.argmax(dim=-1).eq(data["is_same"]).sum().item()
-            total_correct_1 += correct1
-            correct2 = filleds.eq(data['bert_label']).sum().item() / 220
-            total_correct_2 += correct2
-            total_element += data["is_same"].nelement()
-        return  avg_loss/len(data_iter), total_correct_1*100.0/total_element, total_correct_2*100.0/total_element 
+        # TSM prediction accuracy
+        n = data["is_same"].nelement()
+        acc_tsm = tsm.argmax(dim=-1).eq(data["is_same"]).sum().item()  / n * 100
+        acc_msm = filleds.eq(data['bert_label']).sum().item() / 220  / n * 100
+    
+        return loss.item(), loss_tsm.item(), loss_msm.item(), acc_tsm, acc_msm, validity
     
     def num2str(self, nums):
         s = [self.vocab.itos[num] for num in nums]
@@ -148,16 +128,16 @@ def main():
 
     vocab = WordVocab.load_vocab(args.vocab)
     train_dataset = STDataset(args.train_data, vocab, seq_len=args.seq_len)
-    test_dataset = STDataset(args.test_data, vocab, seq_len=args.seq_len)
     train_data_loader = DataLoader(train_dataset, batch_size=args.batch_size, num_workers=args.n_worker)
-    test_data_loader = DataLoader(test_dataset, batch_size=args.batch_size, num_workers=args.n_worker)
 
     def objective(trial):
-        trainer = get_trainer(trial, args, vocab, train_data_loader, test_data_loader)
-        for epoch in tqdm(range(args.n_epoch)):
-            loss, acc1, acc2 = trainer.train(epoch)            
-            loss, acc1, acc2 = trainer.test(epoch)
-        print('2SM, MSM:', acc1, acc2)
+        trainer = get_trainer(trial, args, vocab, train_data_loader, None)
+        data_iter = tqdm(enumerate(train_data_loader), total=len(train_data_loader), bar_format="{l_bar}{r_bar}")
+        for iter, data in data_iter:
+            loss, _, __, acc_tsm, acc_msm, validity = trainer.iteration(data)
+            if iter>5000:
+                break
+        print('2SM: {:.3f}, MSM: {:.3f}, VAL: {:,3f}', acc_tsm, acc_msm, validity)
         return loss
 
     study = optuna.create_study()
