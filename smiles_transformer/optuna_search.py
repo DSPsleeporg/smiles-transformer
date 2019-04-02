@@ -92,7 +92,7 @@ class STTrainer:
             avg_loss += loss.item()
             correct1 = tsm.argmax(dim=-1).eq(data["is_same"]).sum().item()
             total_correct_1 += correct1
-            correct2 = filleds.eq(data['bert_label']).sum().item()
+            correct2 = filleds.eq(data['bert_label']).sum().item() / 220
             total_correct_2 += correct2
             total_element += data["is_same"].nelement()
         return  avg_loss/len(data_iter), total_correct_1*100.0/total_element, total_correct_2*100.0/total_element 
