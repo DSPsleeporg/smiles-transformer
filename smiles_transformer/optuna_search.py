@@ -133,12 +133,18 @@ def main():
     def objective(trial):
         trainer = get_trainer(trial, args, vocab, train_data_loader, None)
         data_iter = tqdm(enumerate(train_data_loader), total=len(train_data_loader), bar_format="{l_bar}{r_bar}")
+        l, a1, a2, v = 0, 0, 0, 0
         for iter, data in data_iter:
-            loss, _, __, acc_tsm, acc_msm, validity = trainer.iteration(data)
             if iter>5000:
                 break
-        print('2SM: {:.3f}, MSM: {:.3f}, VAL: {:,3f}', acc_tsm, acc_msm, validity)
-        return loss
+            loss, _, __, acc_tsm, acc_msm, validity = trainer.iteration(data)
+            if iter>4900:
+                l += loss
+                a1 += acc_tsm
+                a2 += acc_msm
+                v += validity
+        print('2SM: {:.3f}, MSM: {:.3f}, VAL: {:,3f}', a1/100, a2/100, v/100)
+        return l/100
 
     study = optuna.create_study()
     study.optimize(objective, n_trials=args.n_trial)
