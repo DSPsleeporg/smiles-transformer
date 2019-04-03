@@ -143,7 +143,7 @@ def main():
                 a1 += acc_tsm
                 a2 += acc_msm
                 v += validity
-        print('2SM: {:.3f}, MSM: {:.3f}, VAL: {:,3f}', a1/100, a2/100, v/100)
+        print('2SM: {:.3f}, MSM: {:.3f}, VAL: {:.3f}'.format(a1/100, a2/100, v/100))
         return l/100
 
     study = optuna.create_study()
