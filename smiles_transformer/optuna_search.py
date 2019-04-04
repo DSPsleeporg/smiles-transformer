@@ -90,7 +90,7 @@ class STTrainer:
     
 def get_trainer(trial, args, vocab, train_data_loader, test_data_loader):
     hidden = 256
-    n_layers = [2, 3, 4, 5, 6, 7, 8]
+    n_layers = [4, 5, 6, 7, 8]
     n_layer = trial.suggest_categorical('n_layer', n_layers)
     n_heads = [2, 4, 8]
     n_head = trial.suggest_categorical('n_head', n_heads)
@@ -135,10 +135,10 @@ def main():
         data_iter = tqdm(enumerate(train_data_loader), total=len(train_data_loader), bar_format="{l_bar}{r_bar}")
         l, a1, a2, v = 0, 0, 0, 0
         for iter, data in data_iter:
-            if iter>5000:
+            if iter>10000:
                 break
             loss, _, __, acc_tsm, acc_msm, validity = trainer.iteration(data)
-            if iter>4900:
+            if iter>9900:
                 l += loss
                 a1 += acc_tsm
                 a2 += acc_msm
