@@ -19,7 +19,7 @@ PAD = 0
 
 class STTrainer:
     def __init__(self, bert, vocab_size, train_dataloader, test_dataloader,
-                 lr=1e-4, betas=(0.9, 0.999), final_lr=0.1, weight_decay=1e-4, lr_decay=2,
+                 lr=1e-4, betas=(0.9, 0.999), final_lr=0.1, lr_decay=2,
                  log_freq=100, gpu_ids=[], vocab=None):
         """
         :param bert: BERT model
@@ -27,8 +27,7 @@ class STTrainer:
         :param train_dataloader: train dataset data loader
         :param test_dataloader: test dataset data loader [can be None]
         :param lr: 学習率
-        :param betas: Adam optimizer betas
-        :param weight_decay: Adam optimizer weight decay param
+        :param betas: Adam optimizer betasm
         :param with_cuda: traning with cuda
         :param log_freq: logを表示するiterationの頻度
         """
@@ -44,7 +43,7 @@ class STTrainer:
         self.train_data = train_dataloader
         self.test_data = test_dataloader
 
-        self.optim = AdaBound(self.model.parameters(), lr=lr, final_lr=0.01, weight_decay=weight_decay)
+        self.optim = AdaBound(self.model.parameters(), lr=lr, final_lr=0.01)
         self.scheduler = lr_scheduler.StepLR(self.optim, lr_decay, gamma=0.1) # multiply 0.1 by lr every 2 epochs
         self.criterion = nn.NLLLoss()
         self.log_freq = log_freq
@@ -133,8 +132,8 @@ def main():
     parser = argparse.ArgumentParser(description='Pretrain SMILES Transformer')
     parser.add_argument('--n_epoch', '-e', type=int, default=100, help='number of epochs')
     parser.add_argument('--vocab', '-v', type=str, default='data/vocab.pkl', help='vocabulary (.pkl)')
-    parser.add_argument('--train_data', type=str, default='data/chembl24_bert_train_small.csv', help='train corpus (.csv)')
-    parser.add_argument('--test_data', type=str, default='data/chembl24_bert_test_small.csv', help='test corpus (.csv)')
+    parser.add_argument('--train_data', type=str, default='data/chembl24_bert_train.csv', help='train corpus (.csv)')
+    parser.add_argument('--test_data', type=str, default='data/chembl24_bert_test.csv', help='test corpus (.csv)')
     parser.add_argument('--out-dir', '-o', type=str, default='../result', help='output directory')
     parser.add_argument('--name', '-n', type=str, default='ST', help='model name')
     parser.add_argument('--seq_len', type=int, default=220, help='maximum length of the paired seqence')
@@ -148,7 +147,6 @@ def main():
     parser.add_argument('--beta1', type=float, default=0.9, help='AdaBound beta1')
     parser.add_argument('--beta2', type=float, default=0.999, help='AdaBound beta2')
     parser.add_argument('--final-lr', type=float, default=0.01, help='AdaBound final lr')
-    parser.add_argument('--weight-decay', type=float, default=1e-4, help='dropout rate')
     parser.add_argument('--lr-decay', type=int, default=2, help='lr decay step size')
     parser.add_argument('--log-freq', type=int, default=100, help='log frequency')
     parser.add_argument('--gpu', metavar='N', type=int, nargs='+', help='list of GPU IDs to use')
@@ -168,7 +166,7 @@ def main():
     bert.cuda()
     print("Creating BERT Trainer")
     trainer = STTrainer(bert, len(vocab), train_dataloader=train_data_loader, test_dataloader=None,
-                        lr=args.lr, betas=(args.beta1, args.beta2), final_lr=args.final_lr, weight_decay=args.weight_decay, lr_decay=args.lr_decay,
+                        lr=args.lr, betas=(args.beta1, args.beta2), final_lr=args.final_lr, lr_decay=args.lr_decay,
                         log_freq=args.log_freq, gpu_ids=args.gpu, vocab=vocab)
 
     if not os.path.exists(args.out_dir):

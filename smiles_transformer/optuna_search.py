@@ -122,7 +122,6 @@ def main():
     parser.add_argument('--dropout', '-d', type=float, default=0.1, help='dropout rate')
     parser.add_argument('--beta1', type=float, default=0.9, help='Adam beta1')
     parser.add_argument('--beta2', type=float, default=0.999, help='Adam beta2')
-    parser.add_argument('--weight-decay', type=float, default=0.01, help='dropout rate')
     parser.add_argument('--gpu', metavar='N', type=int, nargs='+', help='list of GPU IDs to use')
     args = parser.parse_args()
 
