@@ -120,7 +120,7 @@ class BERT(nn.Module):
         y = []
         for i,transformer in enumerate(self.transformer_blocks):
             x = transformer.forward(x, mask)
-            if len(self.transformer_blocks)-i<3:
+            if len(self.transformer_blocks)-i<5:
                 y.append(x)
         return torch.cat(y, dim=2)
 

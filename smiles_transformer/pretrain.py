@@ -43,7 +43,7 @@ class STTrainer:
         self.train_data = train_dataloader
         self.test_data = test_dataloader
 
-        self.optim = AdaBound(self.model.parameters(), lr=lr, final_lr=0.01)
+        self.optim = AdaBound(self.model.parameters(), lr=lr, final_lr=final_lr)
         self.scheduler = lr_scheduler.StepLR(self.optim, lr_decay, gamma=0.1) # multiply 0.1 by lr every 2 epochs
         self.criterion = nn.NLLLoss()
         self.log_freq = log_freq
@@ -147,7 +147,7 @@ def main():
     parser.add_argument('--beta1', type=float, default=0.9, help='AdaBound beta1')
     parser.add_argument('--beta2', type=float, default=0.999, help='AdaBound beta2')
     parser.add_argument('--final-lr', type=float, default=0.01, help='AdaBound final lr')
-    parser.add_argument('--lr-decay', type=int, default=2, help='lr decay step size')
+    parser.add_argument('--lr-decay', type=int, default=50000, help='lr decay step size')
     parser.add_argument('--log-freq', type=int, default=100, help='log frequency')
     parser.add_argument('--gpu', metavar='N', type=int, nargs='+', help='list of GPU IDs to use')
     parser.add_argument('--checkpoint', '-c', type=str, default=None, help='Parameter to load')
