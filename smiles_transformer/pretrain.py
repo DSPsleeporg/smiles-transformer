@@ -97,6 +97,7 @@ class STTrainer:
 
         if iter % self.log_freq == 0:
             data_iter.write(str(post_fix))
+            print('')
             print(''.join([self.vocab.itos[j] for j in data['bert_input'][0]]).replace('<pad>', ' ').replace('<mask>', '?').replace('<eos>', '!').replace('<sos>', '!'))
             print(''.join([self.vocab.itos[j] for j in data['bert_label'][0]]).replace('<pad>', ' ').replace('<eos>', '!').replace('<sos>', '!'))
             tmp = utils.sample(msm)[0]
@@ -140,8 +141,8 @@ def main():
     parser.add_argument('--batch_size', '-b', type=int, default=16, help='batch size')
     parser.add_argument('--n_worker', '-w', type=int, default=16, help='number of workers')
     parser.add_argument('--hidden', type=int, default=256, help='length of hidden vector')
-    parser.add_argument('--n_layer', '-l', type=int, default=4, help='number of layers')
-    parser.add_argument('--n_head', type=int, default=4, help='number of attention heads')
+    parser.add_argument('--n_layer', '-l', type=int, default=8, help='number of layers')
+    parser.add_argument('--n_head', type=int, default=8, help='number of attention heads')
     parser.add_argument('--dropout', '-d', type=float, default=0.1, help='dropout rate')
     parser.add_argument('--lr', type=float, default=1e-3, help='AdaBound learning rate')
     parser.add_argument('--beta1', type=float, default=0.9, help='AdaBound beta1')

@@ -111,7 +111,7 @@ class BERT(nn.Module):
 
     def encode(self, x, segment_info):
         """
-        Extract encoded vector from the last 2 layers
+        Extract encoded vector from the last 4 layers
         """
         # xの中で0以上は1, 0未満は0として, maskテンソルを作る
         mask = (x > 0).unsqueeze(1).repeat(1, x.size(1), 1).unsqueeze(1)
@@ -232,6 +232,26 @@ class BERTMSM(nn.Module):
         x = self.bert(x, segment_label)
         return self.msm(x)
 
+class BERTReg(nn.Module):
+    """
+    BERT Language Model
+    Two SMILES Match
+    """
+
+    def __init__(self, bert: BERT):
+        """
+        :param bert: BERT model which should be trained
+        :param vocab_size: total vocab size for masked_lm
+        """
+
+        super().__init__()
+        self.bert = bert
+        self.reg = SingleValueRegression(self.bert.hidden)
+
+    def forward(self, x, segment_label):
+        x = self.bert(x, segment_label)
+        return self.reg(x)
+
 class TwoSmilesMatch(nn.Module):
     """
     2クラス分類問題 : is_same, is_not_same
@@ -267,3 +287,17 @@ class MaskedSmilesModel(nn.Module):
     def forward(self, x):
         return self.softmax(self.linear(x))
 
+class SingleValueRegression(nn.Module):
+    """
+    Regression on a single target value
+    """
+
+    def __init__(self, hidden):
+        """
+        :param hidden: BERT model output size
+        """
+        super().__init__()
+        self.linear = nn.Linear(hidden, 1)
+
+    def forward(self, x):
+        return self.linear(x[:, 0])

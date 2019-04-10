@@ -28,7 +28,7 @@ class Randomizer(object):
 
 class STDataset(Dataset):
 
-    def __init__(self, corpus_path, vocab, seq_len=203, transform=Randomizer(), is_train=True):
+    def __init__(self, corpus_path, vocab, seq_len=220, transform=Randomizer(), is_train=True):
         self.vocab = vocab
         self.seq_len = seq_len
         self.is_train = is_train
@@ -112,6 +112,47 @@ class STDataset(Dataset):
                 ans_ids[i] = self.vocab.stoi.get(token, self.vocab.unk_index)
                 
         return masked_ids, ans_ids
+
+
+class ESOLDataset(Dataset):
+
+    def __init__(self, corpus_path, vocab, seq_len=220, transform=Randomizer()):
+        self.vocab = vocab
+        self.seq_len = seq_len
+        self.transform = transform
+        df = pd.read_csv(corpus_path)
+        self.data_size = len(df)
+        self.smiles = df['SMILES'].values
+        self.Y = df['solubility'].values
+
+    def __len__(self):
+        return self.data_size
+
+    def __getitem__(self, item):
+        sm, y = self.smiles[item], self.Y[item]
+        sm = self.transform(sm)
+        sm = self.encode(sm)
+        # [CLS] tag = SOS tag, [SEP] tag = EOS tag
+        masked_ids = [self.vocab.sos_index] + sm + [self.vocab.eos_index]
+
+        segment_embd = [1]*len(masked_ids)
+        bert_input = masked_ids[:self.seq_len]
+
+        padding = [self.vocab.pad_index]*(self.seq_len - len(bert_input))
+        bert_input.extend(padding), segment_embd.extend(padding)
+
+        output = {"bert_input": bert_input,
+                  "segment_embd": segment_embd,
+                  "target": y}
+        return {key: torch.tensor(value) for key, value in output.items()}
+
+    def encode(self, sm):
+        n_token = len(sm)
+        coded_ids = [None]*n_token
+        for i, token in enumerate(sm):
+            coded_ids[i] = self.vocab.stoi.get(token, self.vocab.unk_index)
+                
+        return coded_ids
 
 
 class TSMDataset(Dataset):

@@ -26,7 +26,6 @@ class STTrainer:
         :param test_dataloader: test dataset data loader [can be None]
         :param lr: 学習率
         :param betas: Adam optimizer betas
-        :param weight_decay: Adam optimizer weight decay param
         :param with_cuda: traning with cuda
         :param log_freq: logを表示するiterationの頻度
         """
@@ -137,12 +136,11 @@ def main():
             if iter>10000:
                 break
             loss, _, __, acc_tsm, acc_msm, validity = trainer.iteration(data)
-            if iter>9900:
-                l += loss
-                a1 += acc_tsm
-                a2 += acc_msm
-                v += validity
-        print('2SM: {:.3f}, MSM: {:.3f}, VAL: {:.3f}'.format(a1/100, a2/100, v/100))
+            l += loss
+            a1 += acc_tsm
+            a2 += acc_msm
+            v += validity
+        print('2SM: {:.3f}, MSM: {:.3f}, VAL: {:.3f}'.format(a1/10000, a2/10000, v/10000))
         return l/100
 
     study = optuna.create_study()
