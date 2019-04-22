@@ -173,7 +173,7 @@ def main():
                     trainer.save(it, save_dir) # Save model
             it += 1
 
-            s = s*0.95 + acc_msm*0.05
+            s = s*0.9 + acc_msm*0.1
             if s > thres: # Mask rate update
                 rate += 0.01
                 thres = (1 - 0.45*rate) * 100
