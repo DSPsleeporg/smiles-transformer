@@ -72,7 +72,7 @@ class MSMTrainer:
         acc_msm = filleds.eq(data['bert_label']).sum().item() / n * 100
 
         if it % self.log_freq == 0:
-            print('Iter: {:d}, Rate: {:.3d},  Loss: {:.3f}, Acc: {:.3f}, Validity: {:.3f}'.format(it, rate, loss.item(), acc_msm, validity))
+            print('Iter: {:d}, Rate: {:.3f},  Loss: {:.3f}, Acc: {:.3f}, Validity: {:.3f}'.format(it, rate, loss.item(), acc_msm, validity))
             print(''.join([self.vocab.itos[j] for j in data['bert_input'][0]]).replace('<pad>', ' ').replace('<mask>', '?').replace('<eos>', '!').replace('<sos>', '!'))
             print(''.join([self.vocab.itos[j] for j in data['bert_label'][0]]).replace('<pad>', ' ').replace('<eos>', '!').replace('<sos>', '!'))
             tmp = utils.sample(msm)[0]
@@ -159,13 +159,13 @@ def main():
 
     print("Training Start")
     s = 0
-    thres = (1 - 0.45*rate) * 100
+    thres = (1 - 0.5*rate) * 100
     it = 0
     max_iter = 1000000
     while (it<=max_iter):
         for data in train_data_loader:
             trainer.scheduler.step() # LR scheduling
-            loss, acc_msm, validity = trainer.iteration(it, rate, data)
+            loss, acc_msm, validity = trainer.iteration(it, data,  rate)
             if it % trainer.log_freq == 0:
                 with open(log_dir + '/' + args.name + '.csv', 'a') as f:
                     f.write('{:d},{:.3f},{:.3f},{:.3f}\n'.format(it, loss, acc_msm, validity))
@@ -176,7 +176,7 @@ def main():
             s = s*0.95 + acc_msm*0.05
             if s > thres: # Mask rate update
                 rate += 0.01
-                thres = (1-rate + rate/2) * 100
+                thres = (1 - 0.45*rate) * 100
                 train_dataset = MSMDataset(args.train_data, vocab, seq_len=args.seq_len, rate=rate)
                 train_data_loader = DataLoader(train_dataset, batch_size=args.batch_size, num_workers=args.n_worker, shuffle=True)
                 s = 0
