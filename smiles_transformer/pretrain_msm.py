@@ -46,7 +46,7 @@ class MSMTrainer:
         self.vocab = vocab
         print("Total Parameters:", sum([p.nelement() for p in self.model.parameters()]))
 
-    def iteration(self, it, data, train=True):
+    def iteration(self, it, data, rate, train=True):
         """
         :param epoch: 現在のepoch
         :param data_loader: torch.utils.data.DataLoader
@@ -72,7 +72,7 @@ class MSMTrainer:
         acc_msm = filleds.eq(data['bert_label']).sum().item() / n * 100
 
         if it % self.log_freq == 0:
-            print('Iter: {:d}, Loss: {:.3f}, Acc: {:.3f}, Validity: {:.3f}'.format(it, loss.item(), acc_msm, validity))
+            print('Iter: {:d}, Rate: {:.3d},  Loss: {:.3f}, Acc: {:.3f}, Validity: {:.3f}'.format(it, rate, loss.item(), acc_msm, validity))
             print(''.join([self.vocab.itos[j] for j in data['bert_input'][0]]).replace('<pad>', ' ').replace('<mask>', '?').replace('<eos>', '!').replace('<sos>', '!'))
             print(''.join([self.vocab.itos[j] for j in data['bert_label'][0]]).replace('<pad>', ' ').replace('<eos>', '!').replace('<sos>', '!'))
             tmp = utils.sample(msm)[0]
@@ -158,14 +158,14 @@ def main():
         f.write('iter,loss,acc_msm,acc_val\n')
 
     print("Training Start")
-    cnt = 0
-    thres = (1-rate + rate/2) * 100
+    s = 0
+    thres = (1 - 0.45*rate) * 100
     it = 0
     max_iter = 1000000
     while (it<=max_iter):
         for data in train_data_loader:
             trainer.scheduler.step() # LR scheduling
-            loss, acc_msm, validity = trainer.iteration(it, data)
+            loss, acc_msm, validity = trainer.iteration(it, rate, data)
             if it % trainer.log_freq == 0:
                 with open(log_dir + '/' + args.name + '.csv', 'a') as f:
                     f.write('{:d},{:.3f},{:.3f},{:.3f}\n'.format(it, loss, acc_msm, validity))
@@ -173,14 +173,13 @@ def main():
                     trainer.save(it, save_dir) # Save model
             it += 1
 
-            if acc_msm>=thres:
-                cnt += 1
-            if cnt>=10: # Mask rate update
+            s = s*0.95 + acc_msm*0.05
+            if s > thres: # Mask rate update
                 rate += 0.01
                 thres = (1-rate + rate/2) * 100
                 train_dataset = MSMDataset(args.train_data, vocab, seq_len=args.seq_len, rate=rate)
                 train_data_loader = DataLoader(train_dataset, batch_size=args.batch_size, num_workers=args.n_worker, shuffle=True)
-                cnt = 0
+                s = 0
                 print('Mask rate: {:.2f} ,thres: {:.3f}'.format(rate, thres))
                 break
             
