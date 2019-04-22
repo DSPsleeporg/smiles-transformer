@@ -3,7 +3,7 @@ import os
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch.optim import Adam
+from torch.optim import Adam, lr_scheduler
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 from adabound import AdaBound
@@ -12,45 +12,21 @@ from bert import BERT, BERTMSM
 from dataset import MSMDataset
 from build_vocab import WordVocab
 import numpy as np
+import utils
 
 PAD = 0
 
-class MyLoss(nn.Module):
-    def __init__(self):
-        super(MyLoss, self).__init__()
-        self.nll = nn.NLLLoss()
-        self.vocab_size = 45
-
-    def forward(self, ys, ts):
-        loss = 0
-        for y,t in  zip(ys,ts):
-            b = torch.masked_select(t, t==PAD)
-            l = len(b)
-            b = b.reshape(1,l)
-            a = torch.masked_select(y, t==PAD).reshape(1,self.vocab_size,l)
-            loss += self.nll(a, b)/2 # paddding loss
-            b = torch.masked_select(t, t!=PAD)
-            l = len(b)
-            if l>0:
-                b = b.reshape(1,l)
-                a = torch.masked_select(y, t!=PAD).reshape(1,self.vocab_size,l)
-                loss += self.nll(a, b) # Not padding loss
-
-        return loss/len(ys)
-
 class MSMTrainer:
-    def __init__(self, bert: BERT, vocab_size: int,
-                 train_dataloader: DataLoader, test_dataloader: DataLoader = None,
-                 lr: float = 1e-4, betas=(0.9, 0.999), weight_decay: float = 0.01,
-                 log_freq: int = 10, gpu_ids=[], vocab=None):
+    def __init__(self, bert, vocab_size, 
+                 lr=1e-4, betas=(0.9, 0.999), final_lr=0.1, lr_decay=2,
+                 log_freq=100, gpu_ids=[], vocab=None):
         """
         :param bert: BERT model
         :param vocab_size: vocabに含まれるトータルの単語数
         :param train_dataloader: train dataset data loader
         :param test_dataloader: test dataset data loader [can be None]
         :param lr: 学習率
-        :param betas: Adam optimizer betas
-        :param weight_decay: Adam optimizer weight decay param
+        :param betas: Adam optimizer betasm
         :param with_cuda: traning with cuda
         :param log_freq: logを表示するiterationの頻度
         """
@@ -63,67 +39,49 @@ class MSMTrainer:
         if self.device == 'cuda':
             self.model = nn.DataParallel(self.model, gpu_ids)
 
-        self.train_data = train_dataloader
-        self.test_data = test_dataloader
-
-        self.optim = Adam(self.model.parameters(), lr=lr, betas=betas, weight_decay=weight_decay)
-        #self.optim = AdaBound(self.model.parameters(), lr=lr, final_lr=0.1)
-        #self.criterion = MyLoss()
+        self.optim = AdaBound(self.model.parameters(), lr=lr, final_lr=final_lr)
+        self.scheduler = lr_scheduler.StepLR(self.optim, lr_decay, gamma=0.1) # multiply 0.1 by lr every 2 epochs
         self.criterion = nn.NLLLoss()
-        #self.criterion = nn.NLLLoss(ignore_index=PAD)
-
         self.log_freq = log_freq
         self.vocab = vocab
         print("Total Parameters:", sum([p.nelement() for p in self.model.parameters()]))
-        
 
-    def train(self, epoch):
-        loss = self.iteration(epoch, self.train_data)
-        return loss
-
-    def test(self, epoch):
-        loss = self.iteration(epoch, self.test_data, train=False)
-        return loss
-
-    def iteration(self, epoch, data_loader, train=True):
+    def iteration(self, it, data, train=True):
         """
         :param epoch: 現在のepoch
         :param data_loader: torch.utils.data.DataLoader
         :param train: trainかtestかのbool値
         """
-        str_code = "train" if train else "test"
-        data_iter = tqdm(enumerate(data_loader), desc="EP_%s:%d" % (str_code, epoch), total=len(data_loader), bar_format="{l_bar}{r_bar}")
+        data = {key: value.to(self.device) for key, value in data.items()}
+        msm = self.model.forward(data["bert_input"], data["segment_embd"])
+        loss = self.criterion(msm.transpose(1, 2), data["bert_label"])
+        filleds = utils.sample(msm)
+        smiles = []
+        for filled in filleds:
+            s1, s2 = self.num2str(filled)
+            smiles.append(s1)
+            smiles.append(s2)
+        validity = utils.validity(smiles) * 100
+        if train:
+            self.optim.zero_grad()
+            loss.backward()
+            self.optim.step()
 
-        avg_loss = 0.0
+        # TSM prediction accuracy
+        n = data["bert_input"].nelement() # batch_size * 220
+        acc_msm = filleds.eq(data['bert_label']).sum().item() / n * 100
 
-        for i, data in data_iter:
-            data = {key: value.to(self.device) for key, value in data.items()}
-            msm = self.model.forward(data["bert_input"], data["segment_embd"])
-            loss = self.criterion(msm.transpose(1, 2), data["bert_label"]) 
-            if train:
-                self.optim.zero_grad()
-                loss.backward()
-                self.optim.step()
+        if it % self.log_freq == 0:
+            print('Iter: {:d}, Loss: {:.3f}, Acc: {:.3f}, Validity: {:.3f}'.format(it, loss.item(), acc_msm, validity))
+            print(''.join([self.vocab.itos[j] for j in data['bert_input'][0]]).replace('<pad>', ' ').replace('<mask>', '?').replace('<eos>', '!').replace('<sos>', '!'))
+            print(''.join([self.vocab.itos[j] for j in data['bert_label'][0]]).replace('<pad>', ' ').replace('<eos>', '!').replace('<sos>', '!'))
+            tmp = utils.sample(msm)[0]
+            print(''.join([self.vocab.itos[j] for j in tmp]).replace('<pad>', ' ').replace('<eos>', '!').replace('<sos>', '!'))
+            print('')
+    
+        return loss.item(), acc_msm, validity
 
-            avg_loss += loss.item()
-
-            post_fix = {
-                "epoch": epoch,
-                "iter": i,
-                "avg_loss": avg_loss / (i + 1),
-                "loss": loss.item()
-            }
-            if i % self.log_freq == 0:
-                data_iter.write(str(post_fix))
-                print('*'*10)  
-                print(''.join([self.vocab.itos[j] for j in data['bert_input'][0]]).replace('<pad>', ' ').replace('<mask>', '?').replace('<eos>', '!').replace('<sos>', '!'))
-                print(''.join([self.vocab.itos[j] for j in data['bert_label'][0]]).replace('<pad>', ' ').replace('<eos>', '!').replace('<sos>', '!'))
-                tmp = np.argmax(msm.transpose(1, 2)[0].detach().cpu().numpy(), axis=0) 
-                print(''.join([self.vocab.itos[j] for j in tmp]).replace('<pad>', ' ').replace('<eos>', '!').replace('<sos>', '!'))
-                print('*'*10)
-        return  avg_loss/len(data_iter) # Total loss
-
-    def save(self, epoch, save_dir):
+    def save(self, it, save_dir):
         """
         Saving the current BERT model on file_path
 
@@ -131,10 +89,19 @@ class MSMTrainer:
         :param file_path: model output path which gonna be file_path+"ep%d" % epoch
         :return: final_output_path
         """
-        output_path = save_dir + '/ep_{:02}.pkl'.format(epoch)
+        output_path = save_dir + '/it{:06}.pkl'.format(it)
         torch.save(self.bert.state_dict(), output_path)
         self.bert.to(self.device)
-        print("EP:%d Model Saved on:" % epoch, output_path)
+
+    def num2str(self, nums):
+        s = [self.vocab.itos[num] for num in nums]
+        s = ''.join(s).replace('<pad>', '')
+        ss = s.split('<eos>')
+        if len(ss)>=2:
+            return ss[0], s[1]
+        else:
+            sep = len(s)//2
+            return s[:sep], s[sep:]
 
 def main():
     parser = argparse.ArgumentParser(description='Pretrain SMILES Transformer')
@@ -143,19 +110,20 @@ def main():
     parser.add_argument('--train_data', type=str, default='data/chembl24_bert_train.csv', help='train corpus (.csv)')
     parser.add_argument('--test_data', type=str, default='data/chembl24_bert_test.csv', help='test corpus (.csv)')
     parser.add_argument('--out-dir', '-o', type=str, default='../result', help='output directory')
-    parser.add_argument('--name', '-n', type=str, default='MSM', help='model name')
-    parser.add_argument('--seq_len', type=int, default=203, help='maximum length of the paired seqence')
-    parser.add_argument('--batch_size', '-b', type=int, default=256, help='batch size')
+    parser.add_argument('--name', '-n', type=str, default='ST', help='model name')
+    parser.add_argument('--seq_len', type=int, default=220, help='maximum length of the paired seqence')
+    parser.add_argument('--batch_size', '-b', type=int, default=16, help='batch size')
     parser.add_argument('--n_worker', '-w', type=int, default=16, help='number of workers')
-    parser.add_argument('--hidden', type=int, default=16, help='length of hidden vector')
-    parser.add_argument('--n_layer', '-l', type=int, default=4, help='number of layers')
-    parser.add_argument('--n_head', type=int, default=4, help='number of attention heads')
+    parser.add_argument('--hidden', type=int, default=256, help='length of hidden vector')
+    parser.add_argument('--n_layer', '-l', type=int, default=8, help='number of layers')
+    parser.add_argument('--n_head', type=int, default=8, help='number of attention heads')
     parser.add_argument('--dropout', '-d', type=float, default=0.1, help='dropout rate')
-    parser.add_argument('--lr', type=float, default=1e-3, help='Adam learning rate')
-    parser.add_argument('--beta1', type=float, default=0.9, help='Adam beta1')
-    parser.add_argument('--beta2', type=float, default=0.999, help='Adam beta2')
-    parser.add_argument('--weight-decay', type=float, default=0.01, help='dropout rate')
-    parser.add_argument('--log-freq', type=int, default=1000, help='log frequency')
+    parser.add_argument('--lr', type=float, default=1e-3, help='AdaBound learning rate')
+    parser.add_argument('--beta1', type=float, default=0.9, help='AdaBound beta1')
+    parser.add_argument('--beta2', type=float, default=0.999, help='AdaBound beta2')
+    parser.add_argument('--final-lr', type=float, default=0.01, help='AdaBound final lr')
+    parser.add_argument('--lr-decay', type=int, default=50000, help='lr decay step size')
+    parser.add_argument('--log-freq', type=int, default=100, help='log frequency')
     parser.add_argument('--gpu', metavar='N', type=int, nargs='+', help='list of GPU IDs to use')
     parser.add_argument('--checkpoint', '-c', type=str, default=None, help='Parameter to load')
     args = parser.parse_args()
@@ -163,12 +131,10 @@ def main():
     print("Loading Vocab", args.vocab)
     vocab = WordVocab.load_vocab(args.vocab)
     print("Loading Train Dataset", args.train_data)
-    train_dataset = MSMDataset(args.train_data, vocab, seq_len=args.seq_len)
-    print("Loading Test Dataset", args.test_data)
-    test_dataset = MSMDataset(args.test_data, vocab, seq_len=args.seq_len)
+    rate = 0.01
+    train_dataset = MSMDataset(args.train_data, vocab, seq_len=args.seq_len, rate=rate)
     print("Creating Dataloader")
-    train_data_loader = DataLoader(train_dataset, batch_size=args.batch_size, num_workers=args.n_worker)
-    test_data_loader = DataLoader(test_dataset, batch_size=args.batch_size, num_workers=args.n_worker) 
+    train_data_loader = DataLoader(train_dataset, batch_size=args.batch_size, num_workers=args.n_worker, shuffle=True)
     print("Building BERT model")
     bert = BERT(len(vocab), hidden=args.hidden, n_layers=args.n_layer, attn_heads=args.n_head, dropout=args.dropout)
     if args.checkpoint:
@@ -176,8 +142,8 @@ def main():
         bert.load_state_dict(torch.load(args.checkpoint))
     bert.cuda()
     print("Creating BERT Trainer")
-    trainer = MSMTrainer(bert, len(vocab), train_dataloader=train_data_loader, test_dataloader=test_data_loader,
-                        lr=args.lr, betas=(args.beta1, args.beta2), weight_decay=args.weight_decay,
+    trainer = MSMTrainer(bert, len(vocab),
+                        lr=args.lr, betas=(args.beta1, args.beta2), final_lr=args.final_lr, lr_decay=args.lr_decay,
                         log_freq=args.log_freq, gpu_ids=args.gpu, vocab=vocab)
 
     if not os.path.exists(args.out_dir):
@@ -189,22 +155,35 @@ def main():
     if not os.path.exists(log_dir):
         os.makedirs(log_dir)
     with open(log_dir + '/' + args.name + '.csv', 'a') as f:
-        f.write('epoch,train_loss,test_loss\n')
+        f.write('iter,loss,acc_msm,acc_val\n')
 
     print("Training Start")
-    for epoch in tqdm(range(args.n_epoch)):
-        loss = trainer.train(epoch)
-        print("EP%d Train, loss=" % (epoch), loss)
-        with open(log_dir + '/' + args.name + '.csv', 'a') as f:
-            f.write('%d,%f,' %(epoch, loss))
-    
-        if epoch%10==9:
-            trainer.save(epoch, save_dir) # Save model
-        
-        loss = trainer.test(epoch)
-        print("EP%d Test, loss=" % (epoch), loss)
-        with open(log_dir + '/' + args.name + '.csv', 'a') as f:
-            f.write('%f\n' %(loss))
+    cnt = 0
+    thres = (1-rate + rate/2) * 100
+    it = 0
+    max_iter = 1000000
+    while (it<=max_iter):
+        for data in train_data_loader:
+            trainer.scheduler.step() # LR scheduling
+            loss, acc_msm, validity = trainer.iteration(it, data)
+            if it % trainer.log_freq == 0:
+                with open(log_dir + '/' + args.name + '.csv', 'a') as f:
+                    f.write('{:d},{:.3f},{:.3f},{:.3f}\n'.format(it, loss, acc_msm, validity))
+                if it % (trainer.log_freq*10) == 0:
+                    trainer.save(it, save_dir) # Save model
+            it += 1
+
+            if acc_msm>=thres:
+                cnt += 1
+            if cnt>=10: # Mask rate update
+                rate += 0.01
+                thres = (1-rate + rate/2) * 100
+                train_dataset = MSMDataset(args.train_data, vocab, seq_len=args.seq_len, rate=rate)
+                train_data_loader = DataLoader(train_dataset, batch_size=args.batch_size, num_workers=args.n_worker, shuffle=True)
+                cnt = 0
+                print('Mask rate: {:.2f} ,thres: {:.3f}'.format(rate, thres))
+                break
+            
 
 if __name__=='__main__':
     main()

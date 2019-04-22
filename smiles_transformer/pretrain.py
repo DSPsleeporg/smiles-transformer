@@ -49,15 +49,6 @@ class STTrainer:
         self.log_freq = log_freq
         self.vocab = vocab
         print("Total Parameters:", sum([p.nelement() for p in self.model.parameters()]))
-        
-
-    def train(self, epoch):
-        loss, acc = self.iteration(epoch, self.train_data)
-        return loss, acc
-
-    def test(self, epoch):
-        loss, acc = self.iteration(epoch, self.test_data, train=False)
-        return loss, acc
 
     def iteration(self, epoch, iter, data, data_iter, train=True):
         """

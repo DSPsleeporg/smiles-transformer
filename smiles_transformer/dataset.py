@@ -213,7 +213,7 @@ class TSMDataset(Dataset):
 
 class MSMDataset(Dataset):
 
-    def __init__(self, corpus_path, vocab, seq_len=203, transform=Randomizer(), is_train=True):
+    def __init__(self, corpus_path, vocab, seq_len=220, transform=Randomizer(), is_train=True, rate=0.01):
         self.vocab = vocab
         self.seq_len = seq_len
         self.is_train = is_train
@@ -221,6 +221,7 @@ class MSMDataset(Dataset):
         df = pd.read_csv(corpus_path)
         self.firsts = df['first'].values
         self.data_size = len(self.firsts)
+        self.rate = rate
 
     def __len__(self):
         return self.data_size
@@ -261,11 +262,11 @@ class MSMDataset(Dataset):
             else:  # Do not mask when predicting
                 prob = 1.0
 
-            if prob > 0.15:
+            if prob > self.rate:
                 masked_ids[i] = self.vocab.stoi.get(token, self.vocab.unk_index)
                 ans_ids[i] = PAD
             else: # Mask
-                prob /= 0.15
+                prob /= self.rate
                 # 80% randomly change token to mask token
                 if prob < 0.8:
                     masked_ids[i] = self.vocab.mask_index
