@@ -3,7 +3,7 @@ import os
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch.optim import Adam
+from torch.optim import Adam, lr_scheduler
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 import optuna
@@ -13,46 +13,12 @@ from bert import BERT, BERTMSM
 from dataset import MSMDataset
 from build_vocab import WordVocab
 import numpy as np
+import utils
+
 PAD = 0
 
-class MyLoss(nn.Module):
-    def __init__(self):
-        super(MyLoss, self).__init__()
-        self.nll = nn.NLLLoss()
-        self.vocab_size = 45
-
-    def forward(self, ys, ts):
-        loss = 0
-        for y,t in  zip(ys,ts):
-            b = torch.masked_select(t, t==PAD)
-            l = len(b)
-            b = b.reshape(1,l)
-            a = torch.masked_select(y, t==PAD).reshape(1,self.vocab_size,l)
-            loss += self.nll(a, b)/2 # paddding loss
-            b = torch.masked_select(t, t!=PAD)
-            l = len(b)
-            if l>0:
-                b = b.reshape(1,l)
-                a = torch.masked_select(y, t!=PAD).reshape(1,self.vocab_size,l)
-                loss += self.nll(a, b) # Not padding loss
-
-        return loss/len(ys)
-
 class MSMTrainer:
-    def __init__(self, optim, bert, vocab_size, train_dataloader, test_dataloader,
-                 log_freq=10, gpu_ids=[], vocab=None):
-        """
-        :param bert: BERT model
-        :param vocab_size: vocabに含まれるトータルの単語数
-        :param train_dataloader: train dataset data loader
-        :param test_dataloader: test dataset data loader [can be None]
-        :param lr: 学習率
-        :param betas: Adam optimizer betas
-        :param weight_decay: Adam optimizer weight decay param
-        :param with_cuda: traning with cuda
-        :param log_freq: logを表示するiterationの頻度
-        """
-
+    def __init__(self, optim, bert, vocab_size, gpu_ids=[], vocab=None):
         # GPU環境において、GPUを指定しているかのフラグ
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.bert = bert
@@ -61,48 +27,48 @@ class MSMTrainer:
         if self.device == 'cuda':
             self.model = nn.DataParallel(self.model, gpu_ids)
 
-        self.train_data = train_dataloader
-        self.test_data = test_dataloader
         self.optim = optim
-        #self.criterion = MyLoss()
         self.criterion = nn.NLLLoss()
-
-        self.log_freq = log_freq
         self.vocab = vocab
-        
 
-    def train(self, epoch):
-        loss = self.iteration(epoch, self.train_data)
-        return loss
-
-    def test(self, epoch):
-        loss = self.iteration(epoch, self.test_data, train=False)
-        return loss
-
-    def iteration(self, epoch, data_loader, train=True):
+    def iteration(self, it, data, rate, train=True):
         """
         :param epoch: 現在のepoch
         :param data_loader: torch.utils.data.DataLoader
         :param train: trainかtestかのbool値
         """
-        str_code = "train" if train else "test"
-        data_iter = tqdm(enumerate(data_loader), desc="EP_%s:%d" % (str_code, epoch), total=len(data_loader), bar_format="{l_bar}{r_bar}")
+        data = {key: value.to(self.device) for key, value in data.items()}
+        msm = self.model.forward(data["bert_input"], data["segment_embd"])
+        loss = self.criterion(msm.transpose(1, 2), data["bert_label"])
+        filleds = utils.sample(msm)
+        smiles = []
+        for filled in filleds:
+            s1, s2 = self.num2str(filled)
+            smiles.append(s1)
+            smiles.append(s2)
+        if train:
+            self.optim.zero_grad()
+            loss.backward()
+            self.optim.step()
 
-        avg_loss = 0.0
-
-        for i, data in data_iter:
-            data = {key: value.to(self.device) for key, value in data.items()}
-            msm = self.model.forward(data["bert_input"], data["segment_embd"])
-            loss = self.criterion(msm.transpose(1, 2), data["bert_label"]) 
-            if train:
-                self.optim.zero_grad()
-                loss.backward()
-                self.optim.step()
-
-            avg_loss += loss.item()
-        return  avg_loss/len(data_iter) # Total loss
+        # TSM prediction accuracy
+        n = data["bert_input"].nelement() # batch_size * 220
+        acc_msm = filleds.eq(data['bert_label']).sum().item() / n * 100
     
-def get_trainer(trial, args, vocab, train_data_loader, test_data_loader):
+        return loss.item(), acc_msm
+
+    def num2str(self, nums):
+        s = [self.vocab.itos[num] for num in nums]
+        s = ''.join(s).replace('<pad>', '')
+        ss = s.split('<eos>')
+        if len(ss)>=2:
+            return ss[0], s[1]
+        else:
+            sep = len(s)//2
+            return s[:sep], s[sep:]
+
+    
+def get_trainer(trial, args, vocab):
     hiddens = [128, 256, 512, 1024]
     hidden = trial.suggest_categorical('hidden', hiddens)
     n_layers = [2, 3, 4, 6, 8]
@@ -124,8 +90,7 @@ def get_trainer(trial, args, vocab, train_data_loader, test_data_loader):
         optim = AdaBound(BERTMSM(bert, vocab_size).parameters(), lr=lr, final_lr=0.1)
 
     
-    trainer = MSMTrainer(optim, bert, vocab_size, train_dataloader=train_data_loader, test_dataloader=test_data_loader,
-                        gpu_ids=args.gpu, vocab=vocab)
+    trainer = MSMTrainer(optim, bert, vocab_size, gpu_ids=args.gpu, vocab=vocab)
     return trainer
 
 
@@ -133,14 +98,13 @@ def get_trainer(trial, args, vocab, train_data_loader, test_data_loader):
 
 def main():
     parser = argparse.ArgumentParser(description='Pretrain SMILES Transformer')
-    parser.add_argument('--n_epoch', '-e', type=int, default=300, help='number of epochs')
     parser.add_argument('--n_trial', '-t', type=int, default=100, help='number of optuna trials')
     parser.add_argument('--vocab', '-v', type=str, default='data/vocab.pkl', help='vocabulary (.pkl)')
     parser.add_argument('--train_data', type=str, default='data/chembl24_bert_train.csv', help='train corpus (.csv)')
     parser.add_argument('--test_data', type=str, default='data/chembl24_bert_test.csv', help='test corpus (.csv)')
     parser.add_argument('--name', '-n', type=str, default='ST', help='model name')
-    parser.add_argument('--seq_len', type=int, default=203, help='maximum length of the paired seqence')
-    parser.add_argument('--batch_size', '-b', type=int, default=16, help='batch size')
+    parser.add_argument('--seq_len', type=int, default=220, help='maximum length of the paired seqence')
+    parser.add_argument('--batch_size', '-b', type=int, default=64, help='batch size')
     parser.add_argument('--n_worker', '-w', type=int, default=16, help='number of workers')
     parser.add_argument('--dropout', '-d', type=float, default=0.1, help='dropout rate')
     parser.add_argument('--beta1', type=float, default=0.9, help='Adam beta1')
@@ -150,20 +114,38 @@ def main():
     args = parser.parse_args()
 
     vocab = WordVocab.load_vocab(args.vocab)
-    train_dataset = MSMDataset(args.train_data, vocab, seq_len=args.seq_len)
-    test_dataset = MSMDataset(args.test_data, vocab, seq_len=args.seq_len)
-    train_data_loader = DataLoader(train_dataset, batch_size=args.batch_size, num_workers=args.n_worker)
-    test_data_loader = DataLoader(test_dataset, batch_size=args.batch_size, num_workers=args.n_worker)
-
+    
     def objective(trial):
-        trainer = get_trainer(trial, args, vocab, train_data_loader, test_data_loader)
-        for epoch in tqdm(range(args.n_epoch)):
-            loss = trainer.train(epoch)            
-            loss = trainer.test(epoch)
-        return loss
+        trainer = get_trainer(trial, args, vocab)
+        rate = 0.05
+        train_dataset = MSMDataset(args.train_data, vocab, seq_len=args.seq_len, rate=rate)
+        train_data_loader = DataLoader(train_dataset, batch_size=args.batch_size, num_workers=args.n_worker, shuffle=True)
+        s = 0
+        thres = (1 - 0.4*rate) * 100
+        it = 0
+        max_iter = 10000
+        while (it<=max_iter and rate<=0.5):
+            for data in train_data_loader:
+                loss, acc_msm = trainer.iteration(it, data,  rate)
+                print(it)
+                it += 1
+                s = s*0.9 + acc_msm*0.1
+                if s > thres: # Mask rate update
+                    rate += 0.01
+                    thres = (1 - 0.4*rate) * 100
+                    train_dataset = MSMDataset(args.train_data, vocab, seq_len=args.seq_len, rate=rate)
+                    train_data_loader = DataLoader(train_dataset, batch_size=args.batch_size, num_workers=args.n_worker, shuffle=True)
+                    s = 0
+                    break
+                if it>max_iter:
+                    break
 
+        return -rate+loss/100
+    
     study = optuna.create_study()
     study.optimize(objective, n_trials=args.n_trial)
+    df = study.trials_dataframe()
+    df.to_csv('../results/log/optuna_msm.csv')
 
 if __name__=='__main__':
     main()

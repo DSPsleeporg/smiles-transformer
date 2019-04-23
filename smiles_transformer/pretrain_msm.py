@@ -130,11 +130,6 @@ def main():
 
     print("Loading Vocab", args.vocab)
     vocab = WordVocab.load_vocab(args.vocab)
-    print("Loading Train Dataset", args.train_data)
-    rate = 0.01
-    train_dataset = MSMDataset(args.train_data, vocab, seq_len=args.seq_len, rate=rate)
-    print("Creating Dataloader")
-    train_data_loader = DataLoader(train_dataset, batch_size=args.batch_size, num_workers=args.n_worker, shuffle=True)
     print("Building BERT model")
     bert = BERT(len(vocab), hidden=args.hidden, n_layers=args.n_layer, attn_heads=args.n_head, dropout=args.dropout)
     if args.checkpoint:
@@ -158,11 +153,14 @@ def main():
         f.write('iter,loss,acc_msm,acc_val\n')
 
     print("Training Start")
+    rate = 0.05
+    train_dataset = MSMDataset(args.train_data, vocab, seq_len=args.seq_len, rate=rate)
+    train_data_loader = DataLoader(train_dataset, batch_size=args.batch_size, num_workers=args.n_worker, shuffle=True)
     s = 0
-    thres = (1 - 0.5*rate) * 100
+    thres = (1 - 0.4*rate) * 100
     it = 0
     max_iter = 1000000
-    while (it<=max_iter):
+    while (it<=max_iter and rate<=0.5):
         for data in train_data_loader:
             trainer.scheduler.step() # LR scheduling
             loss, acc_msm, validity = trainer.iteration(it, data,  rate)
@@ -176,12 +174,14 @@ def main():
             s = s*0.9 + acc_msm*0.1
             if s > thres: # Mask rate update
                 rate += 0.01
-                thres = (1 - 0.5*rate) * 100
+                thres = (1 - 0.4*rate) * 100
                 train_dataset = MSMDataset(args.train_data, vocab, seq_len=args.seq_len, rate=rate)
                 train_data_loader = DataLoader(train_dataset, batch_size=args.batch_size, num_workers=args.n_worker, shuffle=True)
                 s = 0
                 print('Mask rate: {:.2f} ,thres: {:.3f}'.format(rate, thres))
                 break
+            if it>max_iter:
+                    break
             
 
 if __name__=='__main__':
