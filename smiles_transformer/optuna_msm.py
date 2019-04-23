@@ -69,7 +69,7 @@ class MSMTrainer:
 
     
 def get_trainer(trial, args, vocab):
-    hiddens = [128, 256, 512, 1024]
+    hiddens = [128, 256]
     hidden = trial.suggest_categorical('hidden', hiddens)
     n_layers = [2, 3, 4, 6, 8]
     n_layer = trial.suggest_categorical('n_layer', n_layers)
