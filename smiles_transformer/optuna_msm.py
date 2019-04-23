@@ -125,7 +125,7 @@ def main():
         it = 0
         max_iter = 10000
         while (it<=max_iter and rate<=0.5):
-            for data in train_data_loader:
+            for data in tqdm(train_data_loader):
                 loss, acc_msm = trainer.iteration(it, data,  rate)
                 it += 1
                 s = s*0.9 + acc_msm*0.1
