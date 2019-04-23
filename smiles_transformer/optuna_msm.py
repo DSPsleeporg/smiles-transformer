@@ -127,7 +127,6 @@ def main():
         while (it<=max_iter and rate<=0.5):
             for data in train_data_loader:
                 loss, acc_msm = trainer.iteration(it, data,  rate)
-                print(it)
                 it += 1
                 s = s*0.9 + acc_msm*0.1
                 if s > thres: # Mask rate update
