@@ -80,14 +80,9 @@ def get_trainer(trial, args, vocab):
     bert = BERT(vocab_size, hidden=hidden, n_layers=n_layer, attn_heads=n_head, dropout=args.dropout)
     bert.cuda()
 
-    optims = ['Adam', 'AdaBound']
-    optim_name = trial.suggest_categorical('optimizer', optims)
-    if optim_name=='Adam':
-        lr = trial.suggest_loguniform('lr', 1e-6, 1e-3)
-        optim = Adam(BERTMSM(bert, vocab_size).parameters(), lr=lr, betas=(args.beta1, args.beta2), weight_decay=args.weight_decay)
-    else:
-        lr = trial.suggest_loguniform('lr', 1e-6, 1e-3)
-        optim = AdaBound(BERTMSM(bert, vocab_size).parameters(), lr=lr, final_lr=0.1)
+    lr = trial.suggest_loguniform('lr', 1e-6, 1e-3)
+    final_lr = trial.suggest_loguniform('final_lr', 1e-4, 1e-1)
+    optim = AdaBound(BERTLM(bert, vocab_size).parameters(), lr=lr, final_lr=final_lr)
 
     
     trainer = MSMTrainer(optim, bert, vocab_size, gpu_ids=args.gpu, vocab=vocab)
@@ -121,7 +116,7 @@ def main():
         train_dataset = MSMDataset(args.train_data, vocab, seq_len=args.seq_len, rate=rate)
         train_data_loader = DataLoader(train_dataset, batch_size=args.batch_size, num_workers=args.n_worker, shuffle=True)
         s = 0
-        thres = (1 - 0.4*rate) * 100
+        thres = (1 - 0.45*rate) * 100
         it = 0
         max_iter = 10000
         while (it<=max_iter and rate<=0.5):
@@ -131,7 +126,7 @@ def main():
                 s = s*0.9 + acc_msm*0.1
                 if s > thres: # Mask rate update
                     rate += 0.01
-                    thres = (1 - 0.4*rate) * 100
+                    thres = (1 - 0.45*rate) * 100
                     train_dataset = MSMDataset(args.train_data, vocab, seq_len=args.seq_len, rate=rate)
                     train_data_loader = DataLoader(train_dataset, batch_size=args.batch_size, num_workers=args.n_worker, shuffle=True)
                     s = 0
