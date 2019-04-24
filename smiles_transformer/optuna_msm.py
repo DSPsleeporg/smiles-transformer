@@ -82,7 +82,7 @@ def get_trainer(trial, args, vocab):
 
     lr = trial.suggest_loguniform('lr', 1e-6, 1e-3)
     final_lr = trial.suggest_loguniform('final_lr', 1e-4, 1e-1)
-    optim = AdaBound(BERTLM(bert, vocab_size).parameters(), lr=lr, final_lr=final_lr)
+    optim = AdaBound(BERTMSM(bert, vocab_size).parameters(), lr=lr, final_lr=final_lr)
 
     
     trainer = MSMTrainer(optim, bert, vocab_size, gpu_ids=args.gpu, vocab=vocab)
@@ -139,7 +139,7 @@ def main():
     study = optuna.create_study()
     study.optimize(objective, n_trials=args.n_trial)
     df = study.trials_dataframe()
-    df.to_csv('../results/log/optuna_msm.csv')
+    df.to_csv('../result/log/optuna_msm.csv', index=False)
 
 if __name__=='__main__':
     main()
