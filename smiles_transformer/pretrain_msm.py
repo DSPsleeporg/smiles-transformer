@@ -153,11 +153,11 @@ def main():
         f.write('iter,loss,acc_msm,acc_val\n')
 
     print("Training Start")
-    rate = 0.05
+    rate = 0.15
     train_dataset = MSMDataset(args.train_data, vocab, seq_len=args.seq_len, rate=rate)
     train_data_loader = DataLoader(train_dataset, batch_size=args.batch_size, num_workers=args.n_worker, shuffle=True)
     s = 0
-    thres = (1 - 0.4*rate) * 100
+    thres = (1 - 0.45*rate) * 100
     it = 0
     max_iter = 1000000
     while (it<=max_iter and rate<=0.5):
@@ -174,7 +174,7 @@ def main():
             s = s*0.9 + acc_msm*0.1
             if s > thres: # Mask rate update
                 rate += 0.01
-                thres = (1 - 0.4*rate) * 100
+                thres = (1 - 0.45*rate) * 100
                 train_dataset = MSMDataset(args.train_data, vocab, seq_len=args.seq_len, rate=rate)
                 train_data_loader = DataLoader(train_dataset, batch_size=args.batch_size, num_workers=args.n_worker, shuffle=True)
                 s = 0

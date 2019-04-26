@@ -112,7 +112,7 @@ def main():
     
     def objective(trial):
         trainer = get_trainer(trial, args, vocab)
-        rate = 0.05
+        rate = 0.15
         train_dataset = MSMDataset(args.train_data, vocab, seq_len=args.seq_len, rate=rate)
         train_data_loader = DataLoader(train_dataset, batch_size=args.batch_size, num_workers=args.n_worker, shuffle=True)
         s = 0
