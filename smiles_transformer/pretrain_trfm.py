@@ -4,20 +4,19 @@ import argparse
 import json
 import os.path
 
-from nltk.translate import bleu_score
 import numpy
 import six
-
+from tqdm import tqdm
 import chainer
 from chainer import cuda
 from chainer.dataset import convert
 from chainer import reporter
 from chainer import training
 from chainer.training import extensions
+from torch.utils.data import DataLoader
 
-import preprocess
-import net
-
+from dataset import TrfmDataset
+from trfm import Transformer
 from subfuncs import VaswaniRule
 
 
@@ -82,44 +81,6 @@ def source_pad_concat_convert(x_seqs, device, eos_id=0, bos_id=2):
     return x_block
 
 
-class CalculateBleu(chainer.training.Extension):
-
-    trigger = 1, 'epoch'
-    priority = chainer.training.PRIORITY_WRITER
-
-    def __init__(
-            self, model, test_data, key, batch=50, device=-1, max_length=50):
-        self.model = model
-        self.test_data = test_data
-        self.key = key
-        self.batch = batch
-        self.device = device
-        self.max_length = max_length
-
-    def __call__(self, trainer):
-        print('## Calculate BLEU')
-        with chainer.no_backprop_mode():
-            with chainer.using_config('train', False):
-                references = []
-                hypotheses = []
-                for i in range(0, len(self.test_data), self.batch):
-                    sources, targets = zip(*self.test_data[i:i + self.batch])
-                    references.extend([[t.tolist()] for t in targets])
-
-                    sources = [
-                        chainer.dataset.to_device(self.device, x) for x in sources]
-                    ys = [y.tolist()
-                          for y in self.model.translate(
-                        sources, self.max_length, beam=False)]
-                    # greedy generation for efficiency
-                    hypotheses.extend(ys)
-
-        bleu = bleu_score.corpus_bleu(
-            references, hypotheses,
-            smoothing_function=bleu_score.SmoothingFunction().method1) * 100
-        print('BLEU:', bleu)
-        reporter.report({self.key: bleu})
-
 
 def main():
     parser = argparse.ArgumentParser(
@@ -158,8 +119,6 @@ def main():
                         help='Vocabulary size of source language')
     parser.add_argument('--target-vocab', type=int, default=50,
                         help='Vocabulary size of target language')
-    parser.add_argument('--no-bleu', '-no-bleu', action='store_true', default=True,
-                        help='Skip BLEU calculation')
     parser.add_argument('--use-label-smoothing', action='store_true',
                         help='Use label smoothing for cross entropy')
     parser.add_argument('--embed-position', action='store_true',
@@ -170,38 +129,15 @@ def main():
     args = parser.parse_args()
     print(json.dumps(args.__dict__, indent=4))
 
-    # Check file
-    en_path = os.path.join(args.input, args.source)
-    source_vocab = ['<eos>', '<unk>', '<bos>'] + \
-        preprocess.count_words(en_path, args.source_vocab)
-    source_data = preprocess.make_dataset(en_path, source_vocab)
-    fr_path = os.path.join(args.input, args.target)
-    target_vocab = ['<eos>', '<unk>', '<bos>'] + \
-        preprocess.count_words(fr_path, args.target_vocab)
-    target_data = preprocess.make_dataset(fr_path, target_vocab)
-    assert len(source_data) == len(target_data)
-    print('Original training data size: %d' % len(source_data))
-    train_data = [(s, t)
-                  for s, t in six.moves.zip(source_data, target_data)
-                  if 0 <= len(s) <= 100 and 0 <= len(t) <= 100]
-    print('Filtered training data size: %d' % len(train_data))
-
-    en_path = os.path.join(args.input, args.source_valid)
-    source_data = preprocess.make_dataset(en_path, source_vocab)
-    fr_path = os.path.join(args.input, args.target_valid)
-    target_data = preprocess.make_dataset(fr_path, target_vocab)
-    assert len(source_data) == len(target_data)
-    test_data = [(s, t) for s, t in six.moves.zip(source_data, target_data)
-                 if 0 < len(s) and 0 < len(t)]
-
-    source_ids = {word: index for index, word in enumerate(source_vocab)}
-    target_ids = {word: index for index, word in enumerate(target_vocab)}
-
-    target_words = {i: w for w, i in target_ids.items()}
-    source_words = {i: w for w, i in source_ids.items()}
+    print("Creating Dataloader")
+    vocab = WordVocab.load_vocab(args.vocab)
+    train_dataset = TrfmDataset(args.train_data, vocab, seq_len=args.seq_len)
+    train_loader = DataLoader(train_dataset, batch_size=args.batch_size, num_workers=args.n_worker, shuffle=True) 
+    val_dataset = TrfmDataset(args.val_data, vocab, seq_len=args.seq_len, is_train=False)
+    val_loader = DataLoader(val_dataset, batch_size=args.batch_size, num_workers=args.n_worker, shuffle=False) 
 
     # Define Model
-    model = net.Transformer(
+    model = Transformer(
         args.layer,
         min(len(source_ids), len(source_words)),
         min(len(target_ids), len(target_words)),
@@ -214,7 +150,6 @@ def main():
     if args.gpu >= 0:
         chainer.cuda.get_device(args.gpu).use()
         model.to_gpu(args.gpu)
-
     # Setup Optimizer
     optimizer = chainer.optimizers.Adam(
         alpha=5e-5,
@@ -223,6 +158,24 @@ def main():
         eps=1e-9
     )
     optimizer.setup(model)
+
+    print("Training Start")
+    for epoch in tqdm(range(args.n_epoch)):
+        for i, data in tqdm(enumerate(train_loader):
+            loss = model(data)
+            loss = F.s
+
+            loss, loss_tsm, loss_msm, acc_tsm, acc_msm, validity = trainer.iteration(epoch, iter, data, data_iter)
+            if iter % trainer.log_freq == 0:
+                with open(log_dir + '/' + args.name + '.csv', 'a') as f:
+                    f.write('{:d},{:d},{:.3f},{:.3f},{:.3f},{:.3f},{:.3f},{:.3f}\n'.format(epoch, iter, loss, loss_tsm, loss_msm, acc_tsm, acc_msm, validity))
+                if iter % (trainer.log_freq*10) == 0:
+                    trainer.save(epoch, iter, save_dir) # Save model
+
+
+    
+
+    
 
     # Setup Trainer
     train_iter = chainer.iterators.SerialIterator(train_data, args.batchsize)
@@ -289,51 +242,6 @@ def main():
         model, 'model_iter_{.updater.iteration}.npz'),
         trigger=(1000, 'iteration'))
 
-    def translate_one(source, target):
-        words = preprocess.split_sentence(source)
-        print('# source : ' + ' '.join(words))
-        x = model.xp.array(
-            [source_ids.get(w, 1) for w in words], 'i')
-        ys = model.translate([x], beam=5)[0]
-        words = [target_words[y] for y in ys]
-        print('#  result : ' + ' '.join(words))
-        print('#  expect : ' + target)
-
-    @chainer.training.make_extension(trigger=(1000, 'iteration'))
-    def translate(trainer):
-        source, target = test_data[numpy.random.choice(len(test_data))]
-        source = ' '.join([source_words[i] for i in source])
-        target = ' '.join([target_words[i] for i in target])
-        translate_one(source, target)
-
-    # Gereneration Test
-    trainer.extend(
-        translate,
-        trigger=(min(1000, iter_per_epoch), 'iteration'))
-
-    # Calculate BLEU every half epoch
-    if not args.no_bleu:
-        trainer.extend(
-            CalculateBleu(
-                model, test_data, 'val/main/bleu',
-                device=args.gpu, batch=args.batchsize // 4),
-            trigger=floor_step((iter_per_epoch // 2, 'iteration')))
-
-    # Log
-    trainer.extend(extensions.LogReport(trigger=log_trigger),
-                   trigger=log_trigger)
-    trainer.extend(extensions.PrintReport(
-        ['epoch', 'iteration',
-         'main/loss', 'val/main/loss',
-         'main/perp', 'val/main/perp',
-         'main/acc', 'val/main/acc',
-         'val/main/bleu',
-         'alpha',
-         'elapsed_time']),
-        trigger=log_trigger)
-
-    print('start training')
-    trainer.run()
 
 
 if __name__ == '__main__':

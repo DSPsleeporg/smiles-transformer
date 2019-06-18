@@ -171,7 +171,6 @@ class BERTEmbedding(nn.Module):
         x = self.token(sequence) + self.position(sequence) + self.segment(segment_label)
         return self.dropout(x)
 
-
 class BERTLM(nn.Module):
     """
     BERT Language Model
@@ -193,6 +192,26 @@ class BERTLM(nn.Module):
         x = self.bert(x, segment_label)
         return self.tsm(x), self.msm(x)
 
+"""
+RNN Seq2seq LM
+"""
+class RNNEncoder(nn.Module):
+    def __init__(self, input_size, hidden_size):
+        super(RNNEncoder, self).__init__()
+        self.hidden_size = hidden_size
+        self.embedding = nn.Embedding(input_size, hidden_size)
+        self.lstm = nn.LSTM()
+
+    def forward(self, input, hidden):
+        embedded = self.embedding(input).view(1, 1, -1)
+        output = embedded
+        output, hidden = self.gru(output, hidden)
+        return output, hidden
+
+
+"""
+For testing
+"""
 class BERTTSM(nn.Module):
     """
     BERT Language Model
