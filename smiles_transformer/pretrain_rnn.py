@@ -72,8 +72,8 @@ def train(model, optimizer, train_loader, vocab, grad_clip):
         optimizer.step()
         total_loss += loss.item()
 
-        if b % 1000 == 0 and b != 0:
-            total_loss = total_loss / 1000
+        if b % 100 == 0 and b != 0:
+            total_loss = total_loss / 100
             print("[%d][loss:%5.2f][pp:%5.2f]" %
                   (b, total_loss, math.exp(total_loss)))
             total_loss = 0
