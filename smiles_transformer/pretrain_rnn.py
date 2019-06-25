@@ -62,10 +62,10 @@ def train(model, optimizer, train_loader, vocab, grad_clip):
     model.train()
     total_loss = 0
     for b,data in tqdm(enumerate(train_loader)):
-        data = data.cuda()
+        data = torch.t(data.cuda()) # (T,B)
         optimizer.zero_grad()
-        output = model(data, data)
-        loss = F.nll_loss(output[1:].view(-1, len(vocab)), 
+        output = model(data, data) # (T,B,V)
+        loss = F.nll_loss(output[1:].view(-1, len(vocab)),
                 data[1:].contiguous().view(-1), ignore_index=PAD)
         loss.backward()
         clip_grad_norm_(model.parameters(), grad_clip)

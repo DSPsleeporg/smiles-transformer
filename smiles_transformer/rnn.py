@@ -23,12 +23,13 @@ class Encoder(nn.Module):
                           dropout=dropout, bidirectional=True)
 
     def forward(self, src, hidden=None):
-        embedded = self.embed(src)
-        outputs, hidden = self.gru(embedded, hidden)
+        # src: (L, B)
+        embedded = self.embed(src)# (L, B, H)
+        outputs, hidden = self.gru(embedded, hidden) # (L, B, 2*H), (2*3, B, H) 
         # sum bidirectional outputs
         outputs = (outputs[:, :, :self.hidden_size] +
                    outputs[:, :, self.hidden_size:])
-        return outputs, hidden
+        return outputs, hidden # (L,B,H), (2*3,B,H)
 
 
 class Attention(nn.Module):
@@ -96,20 +97,18 @@ class Seq2Seq(nn.Module):
         self.encoder = encoder
         self.decoder = decoder
 
-    def forward(self, src, trg, teacher_forcing_ratio=0.5):
+    def forward(self, src, trg, teacher_forcing_ratio=0.5): # (T,B)
         batch_size = src.size(1)
         max_len = trg.size(0)
         vocab_size = self.decoder.output_size
-        outputs = Variable(torch.zeros(max_len, batch_size, vocab_size)).cuda()
-
-        encoder_output, hidden = self.encoder(src)
-        hidden = hidden[:self.decoder.n_layers]
+        outputs = Variable(torch.zeros(max_len, batch_size, vocab_size)).cuda() # (T,B,V)
+        encoder_output, hidden = self.encoder(src) # (T,B,H), (2L,B,H)
+        hidden = hidden[:self.decoder.n_layers] # (L,B,H)
         output = Variable(trg.data[0, :])  # sos
         for t in range(1, max_len):
-            output, hidden, attn_weights = self.decoder(
-                    output, hidden, encoder_output)
+            output, hidden, attn_weights = self.decoder(output, hidden, encoder_output) # (1,B), (L,B,H)
             outputs[t] = output
             is_teacher = random.random() < teacher_forcing_ratio
             top1 = output.data.max(1)[1]
             output = Variable(trg.data[t] if is_teacher else top1).cuda()
-        return outputs
+        return outputs # (T,B,V)
