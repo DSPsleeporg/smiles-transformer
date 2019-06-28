@@ -11,7 +11,7 @@ from torch import optim
 from torch.nn import functional as F
 from torch.autograd import Variable
 from build_vocab import WordVocab
-from dataset import Seq2seqDataset
+from dataset import Seq2seqDataset2
 
 PAD = 0
 UNK = 1
@@ -49,14 +49,14 @@ class TrfmSeq2seq(nn.Module):
         self.trfm = nn.Transformer(d_model=hidden_size, nhead=4, num_encoder_layers=4, num_decoder_layers=4, dim_feedforward=256)
         self.out = nn.Linear(hidden_size, out_size)
 
-    def forward(self, src, hidden=None):
+    def forward(self, src):
         # src: (T,B)
         embedded = self.embed(src)  # (T,B,H)
         embedded = self.pe(embedded) # (T,B,H)
         hidden = self.trfm(embedded, embedded) # (T,B,H)
         out = self.out(hidden) # (T,B,V)
         out = F.log_softmax(out, dim=2) # (T,B,V)
-        return out # (T,B, V)
+        return out # (T,B,V)
 
 def parse_arguments():
     parser = argparse.ArgumentParser(description='Hyperparams')
@@ -82,11 +82,11 @@ def evaluate(model, val_loader, vocab):
     model.eval()
     total_loss = 0
     for b, data in enumerate(val_loader):
-        data = Variable(data.cuda())
+        sm1, sm2 = torch.t(data[0].cuda()), torch.t(data[1].cuda()) # (T,B)
         with torch.no_grad():
-            output = model(data, data) # (T,B)
-        loss = F.nll_loss(output[1:].view(-1, len(vocab)),
-                               data[1:].contiguous().view(-1),
+            output = model(sm1) # (T,B,V)
+        loss = F.nll_loss(output.view(-1, len(vocab)),
+                               sm2.contiguous().view(-1),
                                ignore_index=PAD)
         total_loss += loss.item()
     return total_loss / len(val_loader)
@@ -99,9 +99,9 @@ def main():
     print("[!] Instantiating models...")
     model = TrfmSeq2seq(len(vocab), args.hidden, len(vocab), args.n_layer).cuda()
     optimizer = optim.Adam(model.parameters(), lr=args.lr)
-    train_dataset = Seq2seqDataset(args.train_data, vocab)
+    train_dataset = Seq2seqDataset2(args.train_data, vocab)
     train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, num_workers=args.n_worker)
-    val_dataset = Seq2seqDataset(args.test_data, vocab, is_train=False)
+    val_dataset = Seq2seqDataset2(args.test_data, vocab, is_train=False)
     val_loader = DataLoader(val_dataset, batch_size=args.batch_size, shuffle=False, num_workers=args.n_worker)
     print(model)
     print('Total parameters:', sum(p.numel() for p in model.parameters()))
@@ -109,11 +109,11 @@ def main():
     best_loss = None
     for e in range(1, args.n_epoch):
         for b,data in tqdm(enumerate(train_loader)):
-            data = torch.t(data.cuda()) # (T,B)
+            sm1, sm2 = torch.t(data[0].cuda()), torch.t(data[1].cuda()) # (T,B)
             optimizer.zero_grad()
-            output = model(data, data) # (T,B,V)
-            loss = F.nll_loss(output[1:].view(-1, len(vocab)),
-                    data[1:].contiguous().view(-1), ignore_index=PAD)
+            output = model(sm1) # (T,B,V)
+            loss = F.nll_loss(output.view(-1, len(vocab)),
+                    sm2.contiguous().view(-1), ignore_index=PAD)
             loss.backward()
             optimizer.step()
             if b%100==0:
