@@ -11,7 +11,7 @@ from torch import optim
 from torch.nn import functional as F
 from torch.autograd import Variable
 from build_vocab import WordVocab
-from dataset import Seq2seqDataset2
+from dataset import Seq2seqDataset
 
 PAD = 0
 UNK = 1
@@ -86,7 +86,7 @@ def evaluate(model, val_loader, vocab):
         with torch.no_grad():
             output = model(sm1) # (T,B,V)
         loss = F.nll_loss(output.view(-1, len(vocab)),
-                               sm2.contiguous().view(-1),
+                               sm1.contiguous().view(-1),
                                ignore_index=PAD)
         total_loss += loss.item()
     return total_loss / len(val_loader)
@@ -99,9 +99,9 @@ def main():
     print("[!] Instantiating models...")
     model = TrfmSeq2seq(len(vocab), args.hidden, len(vocab), args.n_layer).cuda()
     optimizer = optim.Adam(model.parameters(), lr=args.lr)
-    train_dataset = Seq2seqDataset2(args.train_data, vocab)
+    train_dataset = Seq2seqDataset(args.train_data, vocab)
     train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, num_workers=args.n_worker)
-    val_dataset = Seq2seqDataset2(args.test_data, vocab, is_train=False)
+    val_dataset = Seq2seqDataset(args.test_data, vocab, is_train=False)
     val_loader = DataLoader(val_dataset, batch_size=args.batch_size, shuffle=False, num_workers=args.n_worker)
     print(model)
     print('Total parameters:', sum(p.numel() for p in model.parameters()))
@@ -113,7 +113,7 @@ def main():
             optimizer.zero_grad()
             output = model(sm1) # (T,B,V)
             loss = F.nll_loss(output.view(-1, len(vocab)),
-                    sm2.contiguous().view(-1), ignore_index=PAD)
+                    sm1.contiguous().view(-1), ignore_index=PAD)
             loss.backward()
             optimizer.step()
             if b%100==0:
@@ -126,7 +126,7 @@ def main():
                     print("[!] saving model...")
                     if not os.path.isdir(".save"):
                         os.makedirs(".save")
-                    torch.save(model.state_dict(), './.save/trfm_%d_%d.pkl' % (e,b))
+                    torch.save(model.state_dict(), './.save/trfmenum_%d_%d.pkl' % (e,b))
                     best_loss = loss
 
 
