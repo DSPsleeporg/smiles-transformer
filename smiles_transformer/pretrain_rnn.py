@@ -152,9 +152,9 @@ def evaluate(model, val_loader, vocab):
     for b, data in enumerate(val_loader):
         sm1, sm2 = torch.t(data[0].cuda()), torch.t(data[1].cuda()) # (T,B)
         with torch.no_grad():
-            output = model(sm1, sm2, teacher_forcing_ratio=0.0) # (T,B,V)
+            output = model(sm1, sm1, teacher_forcing_ratio=0.0) # (T,B,V)
         loss = F.nll_loss(output[1:].view(-1, len(vocab)),
-                               sm2[1:].contiguous().view(-1),
+                               sm1[1:].contiguous().view(-1),
                                ignore_index=PAD)
         total_loss += loss.item()
     return total_loss / len(val_loader)
@@ -184,9 +184,9 @@ def main():
             model.train()
             sm1, sm2 = torch.t(data[0].cuda()), torch.t(data[1].cuda()) # (T,B)
             optimizer.zero_grad()
-            output = model(sm1, sm2, teacher_forcing_ratio=1.0) # (T,B,V)
+            output = model(sm1, sm1, teacher_forcing_ratio=1.0) # (T,B,V)
             loss = F.nll_loss(output[1:].view(-1, len(vocab)),
-                    sm2[1:].contiguous().view(-1), ignore_index=PAD)
+                    sm1[1:].contiguous().view(-1), ignore_index=PAD)
             loss.backward()
             clip_grad_norm_(model.parameters(), args.grad_clip)
             optimizer.step()
@@ -196,12 +196,12 @@ def main():
                 loss = evaluate(model, val_loader, vocab)
                 print('Val {:3d}: iter {:5d} | loss {:.3f} | ppl {:.3f}'.format(e, b, loss, math.exp(loss)))
                 # Save the model if the validation loss is the best we've seen so far.
-                if not best_loss or loss < best_loss:
-                    print("[!] saving model...")
-                    if not os.path.isdir(".save"):
-                        os.makedirs(".save")
-                    torch.save(model.state_dict(), './.save/rnn_%d_%d.pkl' % (e,b))
-                    best_loss = loss
+                #if not best_loss or loss < best_loss:
+                print("[!] saving model...")
+                if not os.path.isdir(".save"):
+                    os.makedirs(".save")
+                torch.save(model.state_dict(), './.save/rnn_%d_%d.pkl' % (e,b))
+                best_loss = loss
 
 if __name__ == "__main__":
     try:
