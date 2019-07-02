@@ -1,6 +1,6 @@
 import argparse
 import random
-import numpy
+import numpy as np
 from tqdm import tqdm
 from torch.utils.data import DataLoader
 import os
@@ -102,10 +102,10 @@ class Decoder(nn.Module):
 
 
 class Seq2Seq(nn.Module):
-    def __init__(self, encoder, decoder):
+    def __init__(self, in_size, hidden_size, out_size, n_layers):
         super(Seq2Seq, self).__init__()
-        self.encoder = encoder
-        self.decoder = decoder
+        self.encoder = Encoder(in_size, hidden_size, hidden_size, n_layers)
+        self.decoder = Decoder(hidden_size, hidden_size, out_size, n_layers)
 
     def forward(self, src, trg, teacher_forcing_ratio=0.5): # (T,B)
         batch_size = src.size(1)
@@ -122,6 +122,28 @@ class Seq2Seq(nn.Module):
             top1 = output.data.max(dim=1)[1] # (B)
             output = Variable(trg.data[t] if is_teacher else top1).cuda()
         return outputs # (T,B,V)
+
+    def _encode(self, src):
+        # src: (T,B)
+        embedded = self.encoder.embed(src)# (T,B,H)
+        _, hidden = self.encoder.gru(embedded, hidden) # (T,B,2H), (2L,B,H)
+        hidden = hidden.detach().numpy() 
+        return np.hstack(hidden[2:]) #(B,4H)
+        
+    def encode(self, src):
+        # src: (T,B)
+        batch_size = src.shape[1]
+        if batch_size<=100:
+            return self._encode(src)
+        else: # Batch is too large to load
+            print('There are {:d} molecules. It will take a little time.'.format(batch_size))
+            st,ed = 0,100
+            out = self._encode(src[:,st:ed]) # (B,4H)
+            while ed<batch_size:
+                st += 100
+                ed += 100
+                out = np.concatenate([out, self._encode(src[:,st:ed])], axis=0)
+            return out
         
 def parse_arguments():
     parser = argparse.ArgumentParser(description='Hyperparams')
@@ -152,9 +174,9 @@ def evaluate(model, val_loader, vocab):
     for b, data in enumerate(val_loader):
         sm1, sm2 = torch.t(data[0].cuda()), torch.t(data[1].cuda()) # (T,B)
         with torch.no_grad():
-            output = model(sm1, sm1, teacher_forcing_ratio=0.0) # (T,B,V)
+            output = model(sm1, sm2, teacher_forcing_ratio=0.0) # (T,B,V)
         loss = F.nll_loss(output[1:].view(-1, len(vocab)),
-                               sm1[1:].contiguous().view(-1),
+                               sm2[1:].contiguous().view(-1),
                                ignore_index=PAD)
         total_loss += loss.item()
     return total_loss / len(val_loader)
@@ -184,9 +206,9 @@ def main():
             model.train()
             sm1, sm2 = torch.t(data[0].cuda()), torch.t(data[1].cuda()) # (T,B)
             optimizer.zero_grad()
-            output = model(sm1, sm1, teacher_forcing_ratio=1.0) # (T,B,V)
+            output = model(sm1, sm2, teacher_forcing_ratio=1.0) # (T,B,V)
             loss = F.nll_loss(output[1:].view(-1, len(vocab)),
-                    sm1[1:].contiguous().view(-1), ignore_index=PAD)
+                    sm2[1:].contiguous().view(-1), ignore_index=PAD)
             loss.backward()
             clip_grad_norm_(model.parameters(), args.grad_clip)
             optimizer.step()
@@ -196,11 +218,11 @@ def main():
                 loss = evaluate(model, val_loader, vocab)
                 print('Val {:3d}: iter {:5d} | loss {:.3f} | ppl {:.3f}'.format(e, b, loss, math.exp(loss)))
                 # Save the model if the validation loss is the best we've seen so far.
-                #if not best_loss or loss < best_loss:
+                
                 print("[!] saving model...")
                 if not os.path.isdir(".save"):
                     os.makedirs(".save")
-                torch.save(model.state_dict(), './.save/rnn_%d_%d.pkl' % (e,b))
+                torch.save(model.state_dict(), './.save/rnnenum_%d_%d.pkl' % (e,b))
                 best_loss = loss
 
 if __name__ == "__main__":
