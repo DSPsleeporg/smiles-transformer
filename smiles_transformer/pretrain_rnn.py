@@ -101,9 +101,9 @@ class Decoder(nn.Module):
         return output, hidden, attn_weights
 
 
-class Seq2Seq(nn.Module):
+class RNNSeq2Seq(nn.Module):
     def __init__(self, in_size, hidden_size, out_size, n_layers):
-        super(Seq2Seq, self).__init__()
+        super(RNNSeq2Seq, self).__init__()
         self.encoder = Encoder(in_size, hidden_size, hidden_size, n_layers)
         self.decoder = Decoder(hidden_size, hidden_size, out_size, n_layers)
 
@@ -126,7 +126,7 @@ class Seq2Seq(nn.Module):
     def _encode(self, src):
         # src: (T,B)
         embedded = self.encoder.embed(src)# (T,B,H)
-        _, hidden = self.encoder.gru(embedded, hidden) # (T,B,2H), (2L,B,H)
+        _, hidden = self.encoder.gru(embedded, None) # (T,B,2H), (2L,B,H)
         hidden = hidden.detach().numpy() 
         return np.hstack(hidden[2:]) #(B,4H)
         
@@ -191,7 +191,7 @@ def main():
     print("[!] Instantiating models...")
     encoder = Encoder(len(vocab), embed_size, hidden_size, n_layers=3, dropout=0.5)
     decoder = Decoder(embed_size, hidden_size, len(vocab), n_layers=3, dropout=0.5)
-    model = Seq2Seq(encoder, decoder).cuda()
+    model = RNNSeq2Seq(encoder, decoder).cuda()
     optimizer = optim.Adam(model.parameters(), lr=args.lr)
     train_dataset = Seq2seqDataset(args.train_data, vocab)
     train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, num_workers=args.n_worker)

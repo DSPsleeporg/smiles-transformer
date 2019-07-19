@@ -1,4 +1,5 @@
 import math
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -109,7 +110,7 @@ class BERT(nn.Module):
             x = transformer.forward(x, mask)
         return x
 
-    def encode(self, x, segment_info):
+    def _encode(self, x, segment_info):
         """
         Extract encoded vector from the last 4 layers
         """
@@ -117,12 +118,26 @@ class BERT(nn.Module):
         mask = (x > 0).unsqueeze(1).repeat(1, x.size(1), 1).unsqueeze(1)
 
         x = self.embedding(x, segment_info)
-        y = []
-        for i,transformer in enumerate(self.transformer_blocks):
-            x = transformer.forward(x, mask)
-            if len(self.transformer_blocks)-i<5:
-                y.append(x)
-        return torch.cat(y, dim=2)
+        for i in range(len(self.transformer_blocks)-1):
+            x = self.transformer_blocks[i].forward(x, mask)
+        penul = x.detach().numpy()
+        output = self.transformer_blocks[-1].forward(x, mask).detach().numpy()
+        # mean, max, first*2
+        return np.hstack([np.mean(output, axis=1), np.max(output, axis=1), output[:,0,:], penul[:,0,:] ]) # (B,4H)
+
+    def encode(self, x, segment_info):
+        batch_size = x.shape[0]
+        if batch_size<=100:
+            return self._encode(x, segment_info)
+        else: # Batch is too large to load
+            print('There are {:d} molecules. It will take a little time.'.format(batch_size))
+            st,ed = 0,100
+            out = self._encode(x[st:ed], segment_info[st:ed]) # (B,4H)
+            while ed<batch_size:
+                st += 100
+                ed += 100
+                out = np.concatenate([out, self._encode(x[st:ed], segment_info[st:ed])], axis=0)
+            return out # (B,4H)
 
 class TokenEmbedding(nn.Embedding):
     def __init__(self, vocab_size, embed_size):
@@ -191,23 +206,6 @@ class BERTLM(nn.Module):
     def forward(self, x, segment_label):
         x = self.bert(x, segment_label)
         return self.tsm(x), self.msm(x)
-
-"""
-RNN Seq2seq LM
-"""
-class RNNEncoder(nn.Module):
-    def __init__(self, input_size, hidden_size):
-        super(RNNEncoder, self).__init__()
-        self.hidden_size = hidden_size
-        self.embedding = nn.Embedding(input_size, hidden_size)
-        self.lstm = nn.LSTM()
-
-    def forward(self, input, hidden):
-        embedded = self.embedding(input).view(1, 1, -1)
-        output = embedded
-        output, hidden = self.gru(output, hidden)
-        return output, hidden
-
 
 """
 For testing
