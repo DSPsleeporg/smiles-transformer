@@ -1,15 +1,17 @@
 import argparse
-import numpy as np
-from tqdm import tqdm
-from torch.utils.data import DataLoader
-import os
 import math
-import argparse
+import os
+
+import numpy as np
+import pandas as pd
 import torch
 from torch import nn
 from torch import optim
-from torch.nn import functional as F
 from torch.autograd import Variable
+from torch.nn import functional as F
+from torch.utils.data import DataLoader
+from tqdm import tqdm
+
 from build_vocab import WordVocab
 from dataset import Seq2seqDataset
 
@@ -46,7 +48,8 @@ class TrfmSeq2seq(nn.Module):
         self.hidden_size = hidden_size
         self.embed = nn.Embedding(in_size, hidden_size)
         self.pe = PositionalEncoding(hidden_size, dropout)
-        self.trfm = nn.Transformer(d_model=hidden_size, nhead=4, num_encoder_layers=4, num_decoder_layers=4, dim_feedforward=256)
+        self.trfm = nn.Transformer(d_model=hidden_size, nhead=4, 
+        num_encoder_layers=n_layers, num_decoder_layers=n_layers, dim_feedforward=hidden_size)
         self.out = nn.Linear(hidden_size, out_size)
 
     def forward(self, src):
@@ -92,64 +95,67 @@ def parse_arguments():
     parser = argparse.ArgumentParser(description='Hyperparams')
     parser.add_argument('--n_epoch', '-e', type=int, default=5, help='number of epochs')
     parser.add_argument('--vocab', '-v', type=str, default='data/vocab.pkl', help='vocabulary (.pkl)')
-    parser.add_argument('--train_data', type=str, default='data/chembl24_bert_train.csv', help='train corpus (.csv)')
-    parser.add_argument('--test_data', type=str, default='data/chembl24_bert_test.csv', help='test corpus (.csv)')
+    parser.add_argument('--data', '-d', type=str, default='data/chembl_25.csv', help='train corpus (.csv)')
     parser.add_argument('--out-dir', '-o', type=str, default='../result', help='output directory')
     parser.add_argument('--name', '-n', type=str, default='ST', help='model name')
     parser.add_argument('--seq_len', type=int, default=220, help='maximum length of the paired seqence')
-    parser.add_argument('--batch_size', '-b', type=int, default=32, help='batch size')
+    parser.add_argument('--batch_size', '-b', type=int, default=8, help='batch size')
     parser.add_argument('--n_worker', '-w', type=int, default=16, help='number of workers')
     parser.add_argument('--hidden', type=int, default=256, help='length of hidden vector')
     parser.add_argument('--n_layer', '-l', type=int, default=4, help='number of layers')
-    parser.add_argument('--n_head', type=int, default=8, help='number of attention heads')
-    parser.add_argument('--dropout', '-d', type=float, default=0.1, help='dropout rate')
+    parser.add_argument('--n_head', type=int, default=4, help='number of attention heads')
     parser.add_argument('--lr', type=float, default=1e-4, help='Adam learning rate')
     parser.add_argument('--gpu', metavar='N', type=int, nargs='+', help='list of GPU IDs to use')
     return parser.parse_args()
 
 
-def evaluate(model, val_loader, vocab):
+def evaluate(model, test_loader, vocab):
     model.eval()
     total_loss = 0
-    for b, data in enumerate(val_loader):
-        sm1, sm2 = torch.t(data[0].cuda()), torch.t(data[1].cuda()) # (T,B)
+    for b, sm in enumerate(test_loader):
+        sm = torch.t(sm.cuda()) # (T,B)
         with torch.no_grad():
-            output = model(sm1) # (T,B,V)
+            output = model(sm) # (T,B,V)
         loss = F.nll_loss(output.view(-1, len(vocab)),
-                               sm1.contiguous().view(-1),
+                               sm.contiguous().view(-1),
                                ignore_index=PAD)
         total_loss += loss.item()
-    return total_loss / len(val_loader)
+    return total_loss / len(test_loader)
 
 def main():
     args = parse_arguments()
     assert torch.cuda.is_available()
 
+    print('Loading dataset...')
     vocab = WordVocab.load_vocab(args.vocab)
-    print("[!] Instantiating models...")
+    dataset = Seq2seqDataset(pd.read_csv(args.data)['canonical_smiles'].values, vocab)
+    test_size = 10000
+    train, test = torch.utils.data.random_split(dataset, [len(dataset)-test_size, test_size])
+    train_loader = DataLoader(train, batch_size=args.batch_size, shuffle=True, num_workers=args.n_worker)
+    test_loader = DataLoader(test, batch_size=args.batch_size, shuffle=False, num_workers=args.n_worker)
+    print('Train size:', len(train))
+    print('Test size:', len(test))
+    del dataset, train, test
+
     model = TrfmSeq2seq(len(vocab), args.hidden, len(vocab), args.n_layer).cuda()
     optimizer = optim.Adam(model.parameters(), lr=args.lr)
-    train_dataset = Seq2seqDataset(args.train_data, vocab)
-    train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, num_workers=args.n_worker)
-    val_dataset = Seq2seqDataset(args.test_data, vocab, is_train=False)
-    val_loader = DataLoader(val_dataset, batch_size=args.batch_size, shuffle=False, num_workers=args.n_worker)
     print(model)
     print('Total parameters:', sum(p.numel() for p in model.parameters()))
 
     best_loss = None
     for e in range(1, args.n_epoch):
-        for b,data in tqdm(enumerate(train_loader)):
-            sm1, sm2 = torch.t(data[0].cuda()), torch.t(data[1].cuda()) # (T,B)
+        for b, sm in tqdm(enumerate(train_loader)):
+            sm = torch.t(sm.cuda()) # (T,B)
             optimizer.zero_grad()
-            output = model(sm1) # (T,B,V)
+            output = model(sm) # (T,B,V)
             loss = F.nll_loss(output.view(-1, len(vocab)),
-                    sm1.contiguous().view(-1), ignore_index=PAD)
+                    sm.contiguous().view(-1), ignore_index=PAD)
             loss.backward()
             optimizer.step()
             if b%100==0:
                 print('Train {:3d}: iter {:5d} | loss {:.3f} | ppl {:.3f}'.format(e, b, loss.item(), math.exp(loss.item())))
             if b%1000==0:
-                loss = evaluate(model, val_loader, vocab)
+                loss = evaluate(model, test_loader, vocab)
                 print('Val {:3d}: iter {:5d} | loss {:.3f} | ppl {:.3f}'.format(e, b, loss, math.exp(loss)))
                 # Save the model if the validation loss is the best we've seen so far.
                 if not best_loss or loss < best_loss:
@@ -165,3 +171,5 @@ if __name__ == "__main__":
         main()
     except KeyboardInterrupt as e:
         print("[STOP]", e)
+
+

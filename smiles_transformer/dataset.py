@@ -14,8 +14,11 @@ class Randomizer(object):
         self.sme = SmilesEnumerator()
     
     def __call__(self, sm):
-        sm = self.sme.randomize_smiles(sm) # Random transoform
-        sm = split(sm) # Spacing
+        sm_r = self.sme.randomize_smiles(sm) # Random transoform
+        if sm_r is None:
+            sm = split(sm) # Spacing
+        else:
+            sm = split(sm_r)
         return sm.split() # List
 
     def random_transform(self, sm):
@@ -116,34 +119,23 @@ class STDataset(Dataset):
 
 class Seq2seqDataset(Dataset):
 
-    def __init__(self, corpus_path, vocab, seq_len=220, transform=Randomizer(), is_train=True):
+    def __init__(self, smiles, vocab, seq_len=220, transform=Randomizer()):
+        self.smiles = smiles
         self.vocab = vocab
         self.seq_len = seq_len
-        self.is_train = is_train
         self.transform = transform
-        df = pd.read_csv(corpus_path)
-        self.data_size = len(df)
-        self.smiles = df['first'].values
-        max_size = 10000
-        if (not is_train) and self.data_size>max_size:
-            self.smiles = self.smiles[:max_size]
 
     def __len__(self):
         return len(self.smiles)
 
     def __getitem__(self, item):
         sm = self.smiles[item]
-        sm1 = self.transform(sm) # List
-        content = [self.vocab.stoi.get(token, self.vocab.unk_index) for token in sm1]
-        input1 = [self.vocab.sos_index] + content + [self.vocab.eos_index]
-        padding = [self.vocab.pad_index]*(self.seq_len - len(input1))
-        input1.extend(padding)
-        sm2 = self.transform(sm) # List
-        content = [self.vocab.stoi.get(token, self.vocab.unk_index) for token in sm2]
-        input2 = [self.vocab.sos_index] + content + [self.vocab.eos_index]
-        padding = [self.vocab.pad_index]*(self.seq_len - len(input2))
-        input2.extend(padding)
-        return torch.tensor(input1), torch.tensor(input2)
+        sm = self.transform(sm) # List
+        content = [self.vocab.stoi.get(token, self.vocab.unk_index) for token in sm]
+        X = [self.vocab.sos_index] + content + [self.vocab.eos_index]
+        padding = [self.vocab.pad_index]*(self.seq_len - len(X))
+        X.extend(padding)
+        return torch.tensor(X)
 
 class ESOLDataset(Dataset):
 
