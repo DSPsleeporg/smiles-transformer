@@ -1,21 +1,29 @@
 # SMILES Transformer
 
-SMILES Transformer extracts beautiful molecular fingerprints by BERT-like pretraining.
+SMILES Transformer extracts molecular fingerprints from string representations of chemical molecules.  
+The transformer learn latent representation that is useful for various downstream tasks through autoencoding task.
 
 ## Requirement
+This project requires the following libraries.
 
-This project requires additional libraries.
-
-- numpy
-- pandas
-- PyTorch: 1
+- NumPy
+- Pandas
+- PyTorch > 1.2
 - tqdm
-- rdkit
-
-```
-$ pip install tqdm
-```
+- RDKit
 
 ## Dataset
 Canonical SMILES of 1.7 million molecules that have no more than 100 characters from Chembl24 dataset were used.  
 These canonical SMILES were transformed randomly every epoch with [SMILES-enumeration](https://github.com/EBjerrum/SMILES-enumeration) by E. J. Bjerrum.  
+
+## Pre-training
+After preparing the SMILES corpus for pre-training, run:
+
+```
+$ python pretrain_trfm.py
+```
+
+## Downstream Tasks
+See `experiments/` for the example codes.
+
+## Cite

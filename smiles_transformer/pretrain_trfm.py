@@ -152,9 +152,9 @@ def main():
                     sm.contiguous().view(-1), ignore_index=PAD)
             loss.backward()
             optimizer.step()
-            if b%100==0:
-                print('Train {:3d}: iter {:5d} | loss {:.3f} | ppl {:.3f}'.format(e, b, loss.item(), math.exp(loss.item())))
             if b%1000==0:
+                print('Train {:3d}: iter {:5d} | loss {:.3f} | ppl {:.3f}'.format(e, b, loss.item(), math.exp(loss.item())))
+            if b%10000==0:
                 loss = evaluate(model, test_loader, vocab)
                 print('Val {:3d}: iter {:5d} | loss {:.3f} | ppl {:.3f}'.format(e, b, loss, math.exp(loss)))
                 # Save the model if the validation loss is the best we've seen so far.
@@ -162,7 +162,7 @@ def main():
                     print("[!] saving model...")
                     if not os.path.isdir(".save"):
                         os.makedirs(".save")
-                    torch.save(model.state_dict(), './.save/trfmenum_%d_%d.pkl' % (e,b))
+                    torch.save(model.state_dict(), './.save/trfm_new_%d_%d.pkl' % (e,b))
                     best_loss = loss
 
 

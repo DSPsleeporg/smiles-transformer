@@ -3,7 +3,7 @@
 ## Install Anaconda 5.3
 Download shell file to install Anaconda 5.3.1.  
 https://www.anaconda.com/download/#linux  
-Installed Python 3.7 and VS Code.
+Installed Python 3.6 and VS Code.
 
 Add path to Anaconda.
 
@@ -19,10 +19,9 @@ $ pip install --upgrade pip
 $ pip install tqdm nltk progressbar2 selenium
 ```
 
-TensorFlow hasn't yet supported Python 3.7...
+TensorFlow
 
 ```
-$ conda install python=3.6
 $ pip install opencv-python tensorflow-gpu \
 six cupy-cuda91 chainer
 ```
