@@ -1,7 +1,7 @@
 # SMILES Transformer
 
 SMILES Transformer extracts molecular fingerprints from string representations of chemical molecules.  
-The transformer learn latent representation that is useful for various downstream tasks through autoencoding task.
+The transformer learns latent representation that is useful for various downstream tasks through autoencoding task.
 
 ## Requirement
 This project requires the following libraries.
