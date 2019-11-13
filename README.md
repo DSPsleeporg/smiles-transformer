@@ -1,6 +1,6 @@
 # SMILES Transformer
 
-SMILES Transformer extracts molecular fingerprints from string representations of chemical molecules.  
+[SMILES Transformer](http://arxiv.org/abs/1911.04738) extracts molecular fingerprints from string representations of chemical molecules.  
 The transformer learns latent representation that is useful for various downstream tasks through autoencoding task.
 
 ## Requirement
@@ -27,3 +27,4 @@ $ python pretrain_trfm.py
 See `experiments/` for the example codes.
 
 ## Cite
+http://arxiv.org/abs/1911.04738
