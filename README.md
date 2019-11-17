@@ -27,4 +27,13 @@ $ python pretrain_trfm.py
 See `experiments/` for the example codes.
 
 ## Cite
-http://arxiv.org/abs/1911.04738
+```
+@article{honda2019smiles,
+    title={SMILES Transformer: Pre-trained Molecular Fingerprint for Low Data Drug Discovery},
+    author={Shion Honda and Shoi Shi and Hiroki R. Ueda},
+    year={2019},
+    eprint={1911.04738},
+    archivePrefix={arXiv},
+    primaryClass={cs.LG}
+}
+```
