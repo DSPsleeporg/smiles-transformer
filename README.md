@@ -23,7 +23,7 @@ After preparing the SMILES corpus for pre-training, run:
 $ python pretrain_trfm.py
 ```
 
-Pre-trained model is [here](https://drive.google.com/drive/folders/1mY03ZwfaYx7p9AtPPhFtU_TubuBEnxRh?usp=sharing).
+Pre-trained model is [here](https://drive.google.com/file/d/1LwE2BzvtDaPGYv0OR6iBjmsqoloH885N/view?usp=sharing).
 
 ## Downstream Tasks
 See `experiments/` for the example codes.
