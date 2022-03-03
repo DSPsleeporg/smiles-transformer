@@ -55,7 +55,7 @@ class TrfmSeq2seq(nn.Module):
     def forward(self, src):
         # src: (T,B)
         embedded = self.embed(src)  # (T,B,H)
-        embedded = self.pe(embedded) # (T,B,H)
+        embedded += self.pe(embedded) # (T,B,H)
         hidden = self.trfm(embedded, embedded) # (T,B,H)
         out = self.out(hidden) # (T,B,V)
         out = F.log_softmax(out, dim=2) # (T,B,V)
