@@ -64,7 +64,7 @@ class TrfmSeq2seq(nn.Module):
     def _encode(self, src):
         # src: (T,B)
         embedded = self.embed(src)  # (T,B,H)
-        embedded += self.pe(embedded) # (T,B,H)
+        embedded = self.pe(embedded) # (T,B,H)
         output = embedded
         for i in range(self.trfm.encoder.num_layers - 1):
             output = self.trfm.encoder.layers[i](output, None)  # (T,B,H)
