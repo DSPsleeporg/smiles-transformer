@@ -2,7 +2,7 @@ import argparse
 import pandas as pd
 from tqdm import tqdm
 
-from utils import split
+from .utils import split
 
 def main():
     parser = argparse.ArgumentParser(description='Build a corpus file')

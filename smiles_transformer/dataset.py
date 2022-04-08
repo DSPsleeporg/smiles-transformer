@@ -3,8 +3,8 @@ import pandas as pd
 import torch
 from torch.utils.data import Dataset, DataLoader
 
-from enumerator import SmilesEnumerator
-from utils import split
+from .enumerator import SmilesEnumerator
+from .utils import split
 
 PAD = 0
 MAX_LEN = 220

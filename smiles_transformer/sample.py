@@ -1,4 +1,4 @@
-from enumerator import SmilesEnumerator
+from .enumerator import SmilesEnumerator
 
 sme = SmilesEnumerator()
 smiles = ''
