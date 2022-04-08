@@ -1,7 +1,7 @@
 import setuptools
 from setuptools import setup, find_packages
 
-setup(name='smiles-transformer',
+setup(name='smiles_transformer',
       version='1.0.0',
       description='Original implementation of the paper "SMILES Transformer: Pre-trained Molecular Fingerprint for Low Data Drug Discovery"',
       long_description=open('README.md').read(),
@@ -18,5 +18,5 @@ setup(name='smiles-transformer',
           'rdkit-pypi',
       ],
       python_requires='>=3',
-      packages=setuptools.find_packages(where='smiles_transformer')
+      packages=['smiles_transformer']
       )
