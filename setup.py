@@ -9,13 +9,11 @@ setup(name='smiles_transformer',
       author_email='https://twitter.com/shion_honda',
       url='https://github.com/DSPsleeporg/smiles-transformer',
       license='MIT',
-      # py_modules=['calWordsFreq', 'findKeywordSentences'],
       install_requires=[
           'numpy',
           'pandas',
           'torch',
           'tqdm',
-          'rdkit-pypi',
       ],
       python_requires='>=3',
       packages=['smiles_transformer']
