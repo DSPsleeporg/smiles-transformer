@@ -12,8 +12,8 @@ from torch import optim
 from torch.autograd import Variable
 from torch.nn.utils import clip_grad_norm_
 from torch.nn import functional as F
-from build_vocab import WordVocab
-from dataset import Seq2seqDataset
+from .build_vocab import WordVocab
+from .dataset import Seq2seqDataset
 
 PAD = 0
 UNK = 1
