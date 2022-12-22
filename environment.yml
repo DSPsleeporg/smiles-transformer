@@ -1,0 +1,12 @@
+name: smilestfm
+channels:
+  - conda-forge
+dependencies:
+  - rdkit
+  - pytorch
+  #- cpuonly
+  - numpy
+  - pandas
+  - numpy
+  - tqdm
+  - pytdc

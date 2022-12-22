@@ -1,7 +1,14 @@
 # SMILES Transformer
 
-[SMILES Transformer](http://arxiv.org/abs/1911.04738) extracts molecular fingerprints from string representations of chemical molecules.  
+[SMILES Transformer](http://arxiv.org/abs/1911.04738) extracts molecular fingerprints from string representations of chemical molecules.
 The transformer learns latent representation that is useful for various downstream tasks through autoencoding task.
+
+## Install
+```
+conda create -n smilestfm
+conda install mamba -c conda-forge
+mamba env update --file environment.yml --prune
+```
 
 ## Requirement
 This project requires the following libraries.
@@ -13,8 +20,8 @@ This project requires the following libraries.
 - RDKit
 
 ## Dataset
-Canonical SMILES of 1.7 million molecules that have no more than 100 characters from Chembl24 dataset were used.  
-These canonical SMILES were transformed randomly every epoch with [SMILES-enumeration](https://github.com/EBjerrum/SMILES-enumeration) by E. J. Bjerrum.  
+Canonical SMILES of 1.7 million molecules that have no more than 100 characters from Chembl24 dataset were used.
+These canonical SMILES were transformed randomly every epoch with [SMILES-enumeration](https://github.com/EBjerrum/SMILES-enumeration) by E. J. Bjerrum.
 
 ## Pre-training
 After preparing the SMILES corpus for pre-training, run:
